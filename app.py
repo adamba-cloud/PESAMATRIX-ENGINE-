@@ -19,7 +19,7 @@ if not WEBHOOK_URL:
 app = Flask(__name__)
 
 
-# ---------------- TELEGRAM BOT ----------------
+# ---------------- TELEGRAM APP ----------------
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
 
@@ -42,8 +42,9 @@ def webhook():
         asyncio.run(tg_app.process_update(update))
 
         return "ok"
+
     except Exception as e:
-        print("Error:", e)
+        print("WEBHOOK ERROR:", e)
         return "error", 500
 
 
@@ -51,8 +52,13 @@ def webhook():
 @app.route("/setwebhook")
 def set_webhook():
     url = f"{WEBHOOK_URL}/webhook"
+
     tg_app.bot.set_webhook(url=url)
-    return f"Webhook set: {url}"
+
+    return {
+        "status": "webhook set",
+        "url": url
+    }
 
 
 # ---------------- HOME ----------------
@@ -64,5 +70,6 @@ def home():
 # ---------------- START SERVER ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print("Starting on port", port)
+    print("Starting server on port", port)
+
     app.run(host="0.0.0.0", port=port)
