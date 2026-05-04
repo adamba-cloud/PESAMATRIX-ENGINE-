@@ -12,7 +12,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("System Running ✅")
 
 
-# ---------------- BUILD APP ----------------
+# ---------------- BUILD APPLICATION ----------------
 def build_app():
     application = Application.builder().token(BOT_TOKEN).build()
 
