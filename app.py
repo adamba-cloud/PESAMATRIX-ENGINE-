@@ -1,7 +1,7 @@
 import os
+import asyncio
 from flask import Flask, request, jsonify
 from telegram import Update
-from telegram.ext import Application
 
 from trading.master_engine import execute_trade
 from bot import build_app
@@ -17,25 +17,30 @@ if not WEBHOOK_URL:
     raise ValueError("WEBHOOK_URL not set")
 
 
-# ---------------- FLASK APP ----------------
+# ---------------- FLASK ----------------
 app = Flask(__name__)
 
 
-# ---------------- TELEGRAM APP ----------------
+# ---------------- TELEGRAM ----------------
 telegram_app = build_app()
-telegram_app.initialize()
-telegram_app.start()
 
 
 # ---------------- WEBHOOK ----------------
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.get_json(force=True)
+    try:
+        data = request.get_json(force=True)
 
-    update = Update.de_json(data, telegram_app.bot)
-    telegram_app.process_update(update)
+        update = Update.de_json(data, telegram_app.bot)
 
-    return "ok"
+        # FIX: async-safe execution
+        asyncio.run(telegram_app.process_update(update))
+
+        return "ok"
+
+    except Exception as e:
+        print("Webhook error:", e)
+        return "error", 500
 
 
 # ---------------- SET WEBHOOK ----------------
@@ -73,7 +78,8 @@ def trade():
     return jsonify(result)
 
 
-# ---------------- START SERVER ----------------
+# ---------------- START ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print("Starting server on port", port)
     app.run(host="0.0.0.0", port=port)
