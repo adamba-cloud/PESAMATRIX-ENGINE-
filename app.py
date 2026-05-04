@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template_string
 
 app = Flask(__name__)
 
-# ---------------- HOME PAGE ----------------
+# ---------------- HOME ----------------
 @app.route("/")
 def home():
     return render_template_string("""
@@ -11,7 +11,7 @@ def home():
     <p>Status: Running</p>
 
     <form action="/trade" method="post">
-        <input name="symbol" placeholder="Symbol (e.g BTCUSDT)" required><br><br>
+        <input name="symbol" placeholder="Symbol (BTCUSDT)" required><br><br>
         <input name="side" placeholder="BUY / SELL" required><br><br>
         <input name="entry" placeholder="Entry Price" required><br><br>
         <input name="sl" placeholder="Stop Loss" required><br><br>
@@ -21,9 +21,8 @@ def home():
     </form>
     """)
 
-# ---------------- TRADE ENGINE ----------------
+# ---------------- MOCK TRADE ----------------
 def execute_trade(symbol, side, entry, sl, tp):
-    # SIMPLE MOCK (replace later)
     return {
         "status": "success",
         "symbol": symbol,
@@ -33,7 +32,7 @@ def execute_trade(symbol, side, entry, sl, tp):
         "tp": tp
     }
 
-# ---------------- TRADE ROUTE ----------------
+# ---------------- TRADE ----------------
 @app.route("/trade", methods=["POST"])
 def trade():
     data = request.form
