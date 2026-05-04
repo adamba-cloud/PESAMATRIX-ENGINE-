@@ -1,28 +1,34 @@
 import os
 import asyncio
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from telegram import Update
-
-from trading.master_engine import execute_trade
-from bot import build_app
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # ---------------- CONFIG ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set")
+    raise Exception("BOT_TOKEN missing")
 
 if not WEBHOOK_URL:
-    raise ValueError("WEBHOOK_URL not set")
+    raise Exception("WEBHOOK_URL missing")
 
 
-# ---------------- FLASK ----------------
+# ---------------- FLASK APP ----------------
 app = Flask(__name__)
 
 
-# ---------------- TELEGRAM ----------------
-telegram_app = build_app()
+# ---------------- TELEGRAM BOT ----------------
+tg_app = Application.builder().token(BOT_TOKEN).build()
+
+
+# ---------------- COMMANDS ----------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is working 🚀")
+
+
+tg_app.add_handler(CommandHandler("start", start))
 
 
 # ---------------- WEBHOOK ----------------
@@ -31,15 +37,13 @@ def webhook():
     try:
         data = request.get_json(force=True)
 
-        update = Update.de_json(data, telegram_app.bot)
+        update = Update.de_json(data, tg_app.bot)
 
-        # FIX: async-safe execution
-        asyncio.run(telegram_app.process_update(update))
+        asyncio.run(tg_app.process_update(update))
 
         return "ok"
-
     except Exception as e:
-        print("Webhook error:", e)
+        print("Error:", e)
         return "error", 500
 
 
@@ -47,39 +51,18 @@ def webhook():
 @app.route("/setwebhook")
 def set_webhook():
     url = f"{WEBHOOK_URL}/webhook"
-
-    telegram_app.bot.set_webhook(url=url)
-
-    return jsonify({
-        "status": "webhook set",
-        "url": url
-    })
+    tg_app.bot.set_webhook(url=url)
+    return f"Webhook set: {url}"
 
 
 # ---------------- HOME ----------------
 @app.route("/")
 def home():
-    return "Copy Trading System Active 🚀"
+    return "System Running 🚀"
 
 
-# ---------------- TRADE API ----------------
-@app.route("/trade", methods=["POST"])
-def trade():
-    data = request.json
-
-    result = execute_trade(
-        data["symbol"],
-        data["side"],
-        data["entry"],
-        data["sl"],
-        data["tp"]
-    )
-
-    return jsonify(result)
-
-
-# ---------------- START ----------------
+# ---------------- START SERVER ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print("Starting server on port", port)
+    print("Starting on port", port)
     app.run(host="0.0.0.0", port=port)
