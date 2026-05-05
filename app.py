@@ -1,11 +1,9 @@
-import os
-import sqlite3
-import uuid
+import os, sqlite3, uuid
 from datetime import datetime, timedelta
 from flask import Flask, request, redirect, session, make_response
 
 app = Flask(__name__)
-app.secret_key = "CHANGE_THIS_SECRET"
+app.secret_key = "change_this_secret"
 
 UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -14,305 +12,353 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 BG = "#0b1220"
 CARD = "#111a2e"
 BLUE = "#38bdf8"
+WHITE = "white"
 
-STYLE = f"margin:0;font-family:Arial;background:{BG};color:white"
+def layout(content):
+    return f"<body style='margin:0;font-family:Arial;background:{BG};color:{WHITE}'>{content}</body>"
 
-# ================= DATABASE =================
+def header(title):
+    return f"<div style='background:{CARD};padding:20px;text-align:center'><h1 style='color:{BLUE}'>PESAMATRIX</h1><h2>{title}</h2></div>"
+
+def card(c):
+    return f"<div style='background:{CARD};padding:15px;margin:10px;border-radius:10px'>{c}</div>"
+
+def link(t,u):
+    return f"<a href='{u}' style='color:{BLUE}'>{t}</a>"
+
+# ================= DB =================
 def db():
     conn = sqlite3.connect("app.db")
     conn.row_factory = sqlite3.Row
     return conn
 
 def init():
-    conn = db()
-    cur = conn.cursor()
+    conn=db();cur=conn.cursor()
 
     cur.execute("""CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY,
-        name TEXT,
-        phone TEXT,
-        code TEXT UNIQUE,
-        role TEXT,
-        trial_end TEXT,
-        created_at TEXT
+        name TEXT, phone TEXT,
+        code TEXT,
+        code_expiry TEXT,
+        is_paid INTEGER DEFAULT 0
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS trades(
         id INTEGER PRIMARY KEY,
-        symbol TEXT,
-        entry TEXT,
-        sl TEXT,
-        tp TEXT,
-        status TEXT
+        symbol TEXT, entry TEXT, sl TEXT, tp TEXT, status TEXT
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS media(
         id INTEGER PRIMARY KEY,
-        filename TEXT,
-        type TEXT
+        filename TEXT, link TEXT
     )""")
 
-    conn.commit()
-    conn.close()
+    cur.execute("""CREATE TABLE IF NOT EXISTS payments(
+        id INTEGER PRIMARY KEY,
+        code TEXT,
+        amount TEXT,
+        status TEXT,
+        created_at TEXT
+    )""")
+
+    conn.commit();conn.close()
 
 init()
 
 # ================= AUTH =================
 def get_user():
     code = session.get("code") or request.cookies.get("code")
-    if not code:
-        return None
+    if not code: return None
 
-    conn = db()
-    cur = conn.cursor()
-    user = cur.execute("SELECT * FROM users WHERE code=?", (code,)).fetchone()
+    conn=db();cur=conn.cursor()
+    u=cur.execute("SELECT * FROM users WHERE code=?",(code,)).fetchone()
     conn.close()
 
-    if user:
-        session["code"] = code
-        return dict(user)
+    if not u: return None
+    if datetime.now()>datetime.fromisoformat(u["code_expiry"]):
+        return None
 
-    return None
+    session["code"]=code
+    return dict(u)
 
-def is_admin():
-    return session.get("admin") == True
-
-# ================= UI HELPERS =================
-def header(title):
-    return f"""
-    <div style="background:{CARD};padding:20px;text-align:center">
-        <h1 style="color:{BLUE}">PESAMATRIX</h1>
-        <h2>{title}</h2>
-    </div>
-    """
-
-def card(content):
-    return f"<div style='background:{CARD};padding:15px;margin:10px;border-radius:12px'>{content}</div>"
-
-def button(txt, link):
-    return f"<a href='{link}' style='background:{BLUE};padding:10px;color:black;border-radius:8px;text-decoration:none'>{txt}</a>"
-
-# =====================================================
-# 🟦 LANDING PAGE (BUSY SAAS)
-# =====================================================
+# ================= LANDING =================
 @app.route("/")
 def home():
-    return f"""
-    <body style="{STYLE}">
-
+    content = f"""
     <div style="padding:60px;text-align:center">
         <h1 style="color:{BLUE};font-size:50px">PESAMATRIX AI</h1>
-        <p>Forex Signals • AI Trading • Automation • Analytics</p>
-
-        <br>
-        {button("Get Started","/register")}
-        {button("Login","/login")}
-        <a href="/admin" style="color:{BLUE};margin-left:10px">Admin</a>
+        <p>Forex Signals • AI Trading • Smart Profits</p>
+        {link("Register","/register")} | {link("Login","/login")} | {link("Admin","/admin")}
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:20px">
-        {card("📊 Live Signals")}
-        {card("📡 AI Market Analysis")}
-        {card("💰 High Accuracy Trades")}
-        {card("🎥 Trading Videos")}
-        {card("📰 Market News")}
-        {card("🔐 Premium Signals")}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);padding:20px">
+        <a href="/signals">{card("📊 Live Signals")}</a>
+        <a href="/media">{card("🎥 Trading Videos")}</a>
+        <a href="/news">{card("📰 Market News")}</a>
+        <a href="/signals">{card("🔐 Premium Signals")}</a>
+        <a href="/dashboard">{card("👤 Dashboard")}</a>
+        <a href="/payments">{card("💰 Payment Info")}</a>
     </div>
 
-    {card("<h3 style='color:#38bdf8'>ABOUT US</h3>We provide professional trading signals and automation tools.")}
+    {card("<h3 style='color:"+BLUE+"'>ABOUT US</h3>We provide high accuracy forex signals and AI-powered trading tools.")}
 
-    {card("""
-    <h3 style='color:#38bdf8'>CONTACT</h3>
-    <a href='tel:+254781585319' style='color:#38bdf8'>Call</a><br>
-    <a href='https://tiktok.com/@smartgoldsignals' style='color:#38bdf8'>TikTok</a>
-    """)}
+    {card(f'''
+    <h3 style="color:{BLUE}">CONTACT</h3>
+    📞 <a href="tel:+254781585319" style="color:{BLUE}">Call</a><br>
+    📞 <a href="tel:+254717434943" style="color:{BLUE}">Call</a><br>
+    🎵 <a href="https://tiktok.com/@smartgoldsignals" style="color:{BLUE}">TikTok</a>
+    ''')}
 
-    {card("""
-    <h3 style='color:#38bdf8'>PAYMENTS</h3>
+    {card(f'''
+    <h3 style="color:{BLUE}">PAYMENT</h3>
     Mpesa Paybill: <b>322372</b><br>
     Account: Your Code
-    """)}
-
-    </body>
+    ''')}
     """
+    return layout(content)
 
-# =====================================================
-# 🟩 REGISTER
-# =====================================================
+# ================= REGISTER =================
 @app.route("/register", methods=["GET","POST"])
 def register():
-    if request.method == "POST":
-        code = str(uuid.uuid4())[:8].upper()
+    if request.method=="POST":
+        code=str(uuid.uuid4())[:8].upper()
+        expiry=datetime.now()+timedelta(hours=24)
 
-        conn = db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO users VALUES(NULL,?,?,?,?,?,?)",
-        (request.form["name"],
-         request.form["phone"],
-         code,
-         "user",
-         (datetime.now()+timedelta(days=3)).isoformat(),
-         datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
+        conn=db();cur=conn.cursor()
+        cur.execute("INSERT INTO users VALUES(NULL,?,?,?,?,0)",
+        (request.form["name"],request.form["phone"],code,expiry.isoformat()))
+        conn.commit();conn.close()
 
-        return f"<body style='{STYLE}'>{header('ACCOUNT CREATED')}<h1>{code}</h1><a href='/login'>Login</a></body>"
+        return layout(header("CODE")+"<h1>"+code+"</h1>"+link("Login","/login"))
 
-    return f"""
-    <body style="{STYLE}">
-    {header("REGISTER")}
+    return layout(header("REGISTER")+"""
     <form method="POST">
     Name:<input name="name"><br>
     Phone:<input name="phone"><br>
     <button>Create</button>
-    </form>
-    </body>
-    """
+    </form>""")
 
-# =====================================================
-# 🟩 LOGIN (PERSISTENT)
-# =====================================================
+# ================= LOGIN =================
 @app.route("/login", methods=["GET","POST"])
 def login():
-    if request.method == "POST":
-        conn = db()
-        cur = conn.cursor()
-        user = cur.execute("SELECT * FROM users WHERE code=?",(request.form["code"],)).fetchone()
+    if request.method=="POST":
+        conn=db();cur=conn.cursor()
+        u=cur.execute("SELECT * FROM users WHERE code=?",(request.form["code"],)).fetchone()
         conn.close()
 
-        if user:
-            session["code"] = user["code"]
-            resp = make_response(redirect("/dashboard"))
-            resp.set_cookie("code", user["code"], max_age=60*60*24*30)
+        if u and datetime.now()<datetime.fromisoformat(u["code_expiry"]):
+            session["code"]=u["code"]
+            resp=make_response(redirect("/dashboard"))
+            resp.set_cookie("code",u["code"],max_age=86400)
             return resp
 
-    return f"<body style='{STYLE}'>{header('LOGIN')}<form method='POST'>Code:<input name='code'><button>Login</button></form></body>"
+    return layout(header("LOGIN")+"""
+    <form method="POST">
+    Code:<input name="code">
+    <button>Login</button>
+    </form>""")
 
-# =====================================================
-# 🟩 DASHBOARD
-# =====================================================
+# ================= DASHBOARD =================
 @app.route("/dashboard")
 def dashboard():
-    u = get_user()
-    if not u:
-        return redirect("/login")
+    u=get_user()
+    if not u: return redirect("/login")
 
-    status = "ACTIVE" if datetime.now() < datetime.fromisoformat(u["trial_end"]) else "EXPIRED"
+    return layout(header("DASHBOARD")+
+        card(f"Name:{u['name']}<br>Code:{u['code']}<br>Paid:{u['is_paid']}")+
+        card(link("View Signals","/signals"))+
+        card(link("Media","/media"))
+    )
 
-    return f"""
-    <body style="{STYLE}">
-    {header("USER DASHBOARD")}
-    {card(f"Name:{u['name']}<br>Code:{u['code']}<br>Status:{status}")}
-
-    {card(button("View Signals","/signals"))}
-    {card(button("Media","/media"))}
-
-    </body>
-    """
-
-# =====================================================
-# 🔐 SIGNAL LOCK
-# =====================================================
+# ================= SIGNAL LOCK =================
 @app.route("/signals")
 def signals():
-    u = get_user()
+    u=get_user()
     if not u:
-        return redirect("/login")
+        return layout(header("LOCKED")+"Login required")
 
-    if datetime.now() > datetime.fromisoformat(u["trial_end"]):
-        return f"<body style='{STYLE}'>{header('🔒 LOCKED')}Please Pay via Mpesa</body>"
+    if not u["is_paid"]:
+        return layout(header("LOCKED")+"Please pay to unlock signals"+link("Payment","/payments"))
 
-    conn = db()
-    cur = conn.cursor()
-    rows = cur.execute("SELECT * FROM trades").fetchall()
+    conn=db();cur=conn.cursor()
+    rows=cur.execute("SELECT * FROM trades").fetchall()
     conn.close()
 
-    out = f"<body style='{STYLE}'>{header('SIGNALS')}"
+    out=header("SIGNALS")
     for r in rows:
-        out += card(f"{r['symbol']} | {r['entry']} | {r['tp']} | {r['sl']} | {r['status']}")
-    return out+"</body>"
+        out+=card(f"{r['symbol']} | {r['entry']} | {r['tp']} | {r['sl']} | {r['status']}")
+    return layout(out)
 
-# =====================================================
-# 🟥 ADMIN
-# =====================================================
-@app.route("/admin", methods=["GET","POST"])
-def admin():
-    if request.method == "POST":
-        if request.form["password"] == "admin123":
-            session["admin"] = True
-            return redirect("/admin")
-
-    if not is_admin():
-        return f"<body style='{STYLE}'>{header('ADMIN LOGIN')}<form method='POST'><input name='password'><button>Login</button></form></body>"
-
-    conn = db()
-    cur = conn.cursor()
-    users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    trades = cur.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
-    media = cur.execute("SELECT COUNT(*) FROM media").fetchone()[0]
-    conn.close()
-
-    return f"""
-    <body style="{STYLE}">
-    {header("ADMIN DASHBOARD")}
-
-    {card(f"Users:{users} | Trades:{trades} | Media:{media}")}
-
-    <a href="/admin/trade">Create Trade</a><br>
-    <a href="/admin/upload">Upload Media</a>
-
-    </body>
-    """
-
-# =====================================================
-# TRADE CREATE
-# =====================================================
-@app.route("/admin/trade", methods=["GET","POST"])
-def trade():
-    if not is_admin():
-        return redirect("/admin")
-
-    if request.method=="POST":
-        conn=db();cur=conn.cursor()
-        cur.execute("INSERT INTO trades VALUES(NULL,?,?,?,?,?)",
-        (request.form["symbol"],request.form["entry"],request.form["sl"],request.form["tp"],request.form["status"]))
-        conn.commit();conn.close()
-        return redirect("/admin")
-
-    return "<form method='POST'>Symbol<input name='symbol'><br>Entry<input name='entry'><br>SL<input name='sl'><br>TP<input name='tp'><br>Status<input name='status'><button>Create</button></form>"
-
-# =====================================================
-# MEDIA UPLOAD (FIXED)
-# =====================================================
-@app.route("/admin/upload", methods=["GET","POST"])
-def upload():
-    if not is_admin():
-        return redirect("/admin")
-
-    if request.method=="POST":
-        f=request.files["file"]
-        path=os.path.join(UPLOAD_FOLDER,f.filename)
-        f.save(path)
-
-        conn=db();cur=conn.cursor()
-        cur.execute("INSERT INTO media VALUES(NULL,?,?)",(f.filename,"image"))
-        conn.commit();conn.close()
-
-    return "<form method='POST' enctype='multipart/form-data'><input type='file' name='file'><button>Upload</button></form>"
-
+# ================= MEDIA =================
 @app.route("/media")
 def media():
     conn=db();cur=conn.cursor()
     rows=cur.execute("SELECT * FROM media").fetchall()
     conn.close()
 
-    out=f"<body style='{STYLE}'>{header('MEDIA')}"
+    out=header("MEDIA")
     for m in rows:
-        out+=f"<img src='/static/uploads/{m['filename']}' width='300'><br>"
-    return out
+        if m["filename"]:
+            out+=f"<img src='/static/uploads/{m['filename']}' width='100%'>"
+        if m["link"]:
+            out+=f"<iframe width='100%' height='200' src='{m['link']}'></iframe>"
+    return layout(out)
 
-# =====================================================
-# RUN
-# =====================================================
-if __name__ == "__main__":
+# ================= NEWS =================
+@app.route("/news")
+def news():
+    return layout(header("NEWS")+card("Market updates coming soon"))
+
+# ================= PAYMENT =================
+@app.route("/payments")
+def payments():
+    u=get_user()
+    acc = u["code"] if u else "Your Code"
+    return layout(header("PAYMENT")+
+        card(f"Mpesa Paybill:322372<br>Account:{acc}")+
+        card("After payment, admin will unlock your account.")
+    )
+
+# ================= ADMIN =================
+@app.route("/admin", methods=["GET","POST"])
+def admin():
+    if request.method=="POST":
+        if request.form["pass"]=="admin123":
+            session["admin"]=True
+            return redirect("/admin")
+
+    if not session.get("admin"):
+        return layout(header("ADMIN LOGIN")+"""
+        <form method="POST">
+        <input name="pass">
+        <button>Login</button>
+        </form>""")
+
+    return layout(header("ADMIN")+
+        link("Users","/admin/users")+"<br>"+
+        link("Trades","/admin/trades")+"<br>"+
+        link("Media Upload","/admin/media")+"<br>"+
+        link("Payments","/admin/payments")
+    )
+
+# ================= ADMIN USERS =================
+@app.route("/admin/users", methods=["GET","POST"])
+def admin_users():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db();cur=conn.cursor()
+
+    if request.method=="POST":
+        if "extend" in request.form:
+            new=datetime.now()+timedelta(hours=24)
+            cur.execute("UPDATE users SET code_expiry=? WHERE code=?",(new.isoformat(),request.form["code"]))
+        if "unlock" in request.form:
+            cur.execute("UPDATE users SET is_paid=1 WHERE code=?",(request.form["code"],))
+
+        conn.commit()
+
+    rows=cur.execute("SELECT * FROM users").fetchall()
+    conn.close()
+
+    out=header("USERS")
+    for u in rows:
+        out+=card(f"""
+        {u['name']} | {u['code']} | Paid:{u['is_paid']}
+        <form method='POST'>
+        <input name='code' value='{u['code']}'>
+        <button name='extend'>Extend 24h</button>
+        <button name='unlock'>Unlock</button>
+        </form>
+        """)
+    return layout(out)
+
+# ================= ADMIN TRADES =================
+@app.route("/admin/trades", methods=["GET","POST"])
+def admin_trades():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db();cur=conn.cursor()
+
+    if request.method=="POST":
+        cur.execute("INSERT INTO trades VALUES(NULL,?,?,?,?,?)",
+        (request.form["symbol"],request.form["entry"],request.form["sl"],request.form["tp"],request.form["status"]))
+        conn.commit()
+
+    rows=cur.execute("SELECT * FROM trades").fetchall()
+    conn.close()
+
+    out=header("TRADES")
+    out+=("""
+    <form method='POST'>
+    Symbol<input name='symbol'>
+    Entry<input name='entry'>
+    SL<input name='sl'>
+    TP<input name='tp'>
+    Status<input name='status'>
+    <button>Create</button>
+    </form>
+    """)
+
+    for r in rows:
+        out+=card(f"{r['symbol']} | {r['status']}")
+    return layout(out)
+
+# ================= ADMIN MEDIA =================
+@app.route("/admin/media", methods=["GET","POST"])
+def admin_media():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db();cur=conn.cursor()
+
+    if request.method=="POST":
+        if "file" in request.files:
+            f=request.files["file"]
+            if f.filename:
+                path=os.path.join(UPLOAD_FOLDER,f.filename)
+                f.save(path)
+                cur.execute("INSERT INTO media VALUES(NULL,?,NULL)",(f.filename,))
+        if request.form.get("link"):
+            cur.execute("INSERT INTO media VALUES(NULL,NULL,?)",(request.form["link"],))
+
+        conn.commit()
+
+    return layout(header("UPLOAD MEDIA")+"""
+    <form method='POST' enctype='multipart/form-data'>
+    File:<input type='file' name='file'><br>
+    OR Video Link:<input name='link'><br>
+    <button>Upload</button>
+    </form>
+    """)
+
+# ================= ADMIN PAYMENTS =================
+@app.route("/admin/payments", methods=["GET","POST"])
+def admin_payments():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db();cur=conn.cursor()
+
+    if request.method=="POST":
+        cur.execute("INSERT INTO payments VALUES(NULL,?,?,?,?)",
+        (request.form["code"],request.form["amount"],"confirmed",datetime.now().isoformat()))
+        cur.execute("UPDATE users SET is_paid=1 WHERE code=?",(request.form["code"],))
+        conn.commit()
+
+    rows=cur.execute("SELECT * FROM payments").fetchall()
+    conn.close()
+
+    out=header("PAYMENTS")
+    out+=("""
+    <form method='POST'>
+    User Code:<input name='code'>
+    Amount:<input name='amount'>
+    <button>Confirm Payment</button>
+    </form>
+    """)
+
+    for p in rows:
+        out+=card(f"{p['code']} | {p['amount']} | {p['status']}")
+    return layout(out)
+
+# ================= RUN =================
+if __name__=="__main__":
     app.run(debug=True)
