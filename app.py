@@ -53,8 +53,16 @@ CREATE TABLE IF NOT EXISTS posts (
 )
 """)
 
-conn.commit()
+cur.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    contact TEXT,
+    created_at TEXT
+)
+""")
 
+conn.commit()
 
 # ---------------- TRADE LOGIC ----------------
 def execute_trade(symbol, side, entry, sl, tp):
@@ -67,219 +75,83 @@ def execute_trade(symbol, side, entry, sl, tp):
         "status": "ACTIVE"
     }
 
-
-# ---------------- CLASSIFY TRADE STATUS ----------------
-def classify_trade(expiry):
+# ---------------- CLASSIFY STATUS ----------------
+def trade_status(expiry):
     if not expiry:
         return "UNKNOWN"
-
-    now = datetime.now()
-    exp = datetime.fromisoformat(expiry)
-
-    if now > exp:
+    if datetime.now() > datetime.fromisoformat(expiry):
         return "EXPIRED"
-
     return "ACTIVE"
 
 
-# ---------------- LIVE API ----------------
-@app.route("/api/live")
-def live_data():
-    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 20")
-    trades = cur.fetchall()
-
-    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 10")
-    posts = cur.fetchall()
-
-    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 10")
-    notes = cur.fetchall()
-
-    return jsonify({
-        "trades": trades,
-        "posts": posts,
-        "notifications": notes
-    })
-
-
-# ---------------- DASHBOARD ----------------
-@app.route("/")
-def dashboard():
-    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
-    trades = cur.fetchall()
-
-    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 5")
-    posts = cur.fetchall()
-
-    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 5")
-    notes = cur.fetchall()
-
+# =====================================================
+# 🌍 PUBLIC LANDING PAGE
+# =====================================================
+@app.route("/public")
+def public():
     return render_template_string("""
     <html>
     <head>
-        <title>PESAMATRIX DASHBOARD</title>
+        <title>PESAMATRIX</title>
         <style>
-            body { margin:0; font-family: Arial; background:#0f172a; color:white; }
-            .sidebar { width:220px; height:100vh; background:#111827; position:fixed; padding:20px; }
-            .sidebar a { display:block; color:#38bdf8; margin:12px 0; text-decoration:none; }
-            .main { margin-left:240px; padding:20px; }
-            .card { background:#1e293b; padding:15px; border-radius:10px; margin-bottom:15px; }
-            input, button { width:100%; padding:10px; margin-top:8px; border-radius:6px; border:none; }
-            button { background:#22c55e; color:white; cursor:pointer; }
-            .box { background:#1e293b; padding:10px; border-radius:8px; margin-top:10px; }
-            .active { border-left:5px solid #22c55e; }
-            .expired { border-left:5px solid #ef4444; opacity:0.6; }
-            .upcoming { border-left:5px solid #facc15; }
+            body { font-family: Arial; background:#0f172a; color:white; margin:0; }
+            .section { padding:40px; border-bottom:1px solid #1e293b; }
+            a { color:#38bdf8; }
         </style>
     </head>
-
     <body>
 
-    <div class="sidebar">
-        <h3>🚀 PESAMATRIX</h3>
-        <a href="/">Dashboard</a>
-        <a href="/access">Access Page</a>
-        <a href="/generate">Generate Code</a>
+    <div class="section">
+        <h1>🚀 PESAMATRIX</h1>
+        <p>Smart Trading Signal Platform</p>
     </div>
 
-    <div class="main">
-
-        <h1>📊 LIVE TRADING DASHBOARD</h1>
-
-        <!-- TRADE FORM -->
-        <div class="card">
-            <h3>Send Trade Signal</h3>
-            <form action="/trade" method="post">
-                <input name="symbol" placeholder="Symbol" required>
-                <input name="side" placeholder="BUY / SELL" required>
-                <input name="entry" placeholder="Entry" required>
-                <input name="sl" placeholder="SL" required>
-                <input name="tp" placeholder="TP" required>
-                <button>Send Signal</button>
-            </form>
-        </div>
-
-        <!-- TRADES -->
-        <div class="card">
-            <h3>Live Trades (Active / Expired)</h3>
-            <div id="tradesBox"></div>
-        </div>
-
-        <!-- POSTS -->
-        <div class="card">
-            <h3>Posts</h3>
-            <div id="postsBox"></div>
-        </div>
-
-        <!-- NOTIFICATIONS -->
-        <div class="card">
-            <h3>Notifications</h3>
-            <div id="notesBox"></div>
-        </div>
-
+    <div class="section">
+        <h2>About</h2>
+        <p>We provide real-time forex & crypto trading signals.</p>
     </div>
 
-    <script>
-        async function loadData(){
-            const res = await fetch("/api/live");
-            const data = await res.json();
+    <div class="section">
+        <h2>Contacts</h2>
+        <p>📞 +254 700 000 000</p>
+        <p>📧 support@pesamatrix.com</p>
+        <p>🌐 Instagram | Telegram | Twitter</p>
+    </div>
 
-            // trades
-            let t = "";
-            data.trades.forEach(x=>{
-                let status = x[6];
-                let cls = status === "EXPIRED" ? "expired" : "active";
+    <div class="section">
+        <h2>Services</h2>
+        <p>🎥 Free Trading Videos</p>
+        <p>📰 Trading News (Open)</p>
+        <p>🔐 Premium Signals (Locked)</p>
+        <a href="/access">Unlock Premium</a>
+    </div>
 
-                t += `<div class="box ${cls}">
-                        <b>${x[1]}</b><br>
-                        ${x[2]} @ ${x[3]}<br>
-                        SL: ${x[4]} TP: ${x[5]}<br>
-                        <small>${status}</small>
-                      </div>`;
-            });
-
-            document.getElementById("tradesBox").innerHTML = t;
-
-            // posts
-            let p = "";
-            data.posts.forEach(x=>{
-                p += `<div class="box"><b>${x[1]}</b><p>${x[2]}</p></div>`;
-            });
-            document.getElementById("postsBox").innerHTML = p;
-
-            // notifications
-            let n = "";
-            data.notifications.forEach(x=>{
-                n += `<div class="box">${x[1]} <br><small>${x[2]}</small></div>`;
-            });
-            document.getElementById("notesBox").innerHTML = n;
-        }
-
-        setInterval(loadData, 3000);
-        loadData();
-    </script>
+    <div class="section">
+        <h2>Sign In</h2>
+        <form action="/register" method="post">
+            <input name="name" placeholder="Name"><br><br>
+            <input name="contact" placeholder="Phone or Email"><br><br>
+            <button>Join</button>
+        </form>
+    </div>
 
     </body>
     </html>
-    """, trades=trades, posts=posts, notes=notes)
+    """)
 
-
-# ---------------- TRADE ----------------
-@app.route("/trade", methods=["POST"])
-def trade():
-    data = request.form
-
-    now = datetime.now()
-    expiry = now + timedelta(hours=4)
-
-    result = execute_trade(
-        data["symbol"],
-        data["side"],
-        data["entry"],
-        data["sl"],
-        data["tp"]
-    )
-
-    cur.execute("""
-        INSERT INTO trades 
-        (symbol, side, entry, sl, tp, status, created_at, expiry_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        result["symbol"],
-        result["side"],
-        result["entry"],
-        result["sl"],
-        result["tp"],
-        "ACTIVE",
-        now.isoformat(),
-        expiry.isoformat()
-    ))
-
-    cur.execute(
-        "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
-        (f"📢 {result['symbol']} {result['side']} @ {result['entry']}", now.isoformat())
-    )
-
+# =====================================================
+# 👤 USER REGISTRATION
+# =====================================================
+@app.route("/register", methods=["POST"])
+def register():
+    cur.execute("INSERT INTO users (name, contact, created_at) VALUES (?, ?, ?)",
+                (request.form["name"], request.form["contact"], datetime.now().isoformat()))
     conn.commit()
-    return redirect("/")
+    return redirect("/public")
 
-
-# ---------------- POSTS ----------------
-@app.route("/post", methods=["POST"])
-def post():
-    cur.execute(
-        "INSERT INTO posts (title, content, media_url, created_at) VALUES (?, ?, ?, ?)",
-        (
-            request.form["title"],
-            request.form["content"],
-            request.form.get("media_url", ""),
-            datetime.now().isoformat()
-        )
-    )
-    conn.commit()
-    return redirect("/")
-
-
-# ---------------- ACCESS ----------------
+# =====================================================
+# 🔐 ACCESS PAGE (LOCKED SIGNALS)
+# =====================================================
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -290,29 +162,119 @@ def access():
 
         if result and datetime.now() < datetime.fromisoformat(result[2]):
             session["access"] = True
-            return redirect("/")
+            return redirect("/signals")
 
-        return "Invalid code"
+        return "Invalid code ❌"
 
-    return "<h2>Enter Access Code</h2><form method='post'><input name='code'><button>Enter</button></form>"
+    return """
+    <h2>🔐 Premium Access</h2>
+    <form method='post'>
+        <input name='code' placeholder='Enter code'>
+        <button>Unlock</button>
+    </form>
+    """
 
+# =====================================================
+# 📊 SIGNALS (LOCKED)
+# =====================================================
+@app.route("/signals")
+def signals():
+    if not session.get("access"):
+        return redirect("/access")
 
-# ---------------- GENERATE ----------------
+    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    rows = cur.fetchall()
+
+    html = "<h1>📊 PREMIUM SIGNALS</h1>"
+
+    for r in rows:
+        status = trade_status(r[7])
+        html += f"""
+        <div style='background:#1e293b;color:white;margin:10px;padding:10px'>
+            <b>{r[1]}</b> {r[2]}<br>
+            Entry: {r[3]} | SL: {r[4]} | TP: {r[5]}<br>
+            Status: {status}
+        </div>
+        """
+
+    return html
+
+# =====================================================
+# 📢 ADMIN DASHBOARD
+# =====================================================
+@app.route("/admin")
+def admin():
+    return render_template_string("""
+    <h1>ADMIN DASHBOARD</h1>
+
+    <form action="/trade" method="post">
+        <input name="symbol" placeholder="Symbol"><br>
+        <input name="side"><br>
+        <input name="entry"><br>
+        <input name="sl"><br>
+        <input name="tp"><br>
+        <button>Send Signal</button>
+    </form>
+
+    <a href="/generate">Generate Code</a>
+    """)
+
+# =====================================================
+# 📡 TRADE POST
+# =====================================================
+@app.route("/trade", methods=["POST"])
+def trade():
+    data = request.form
+    now = datetime.now()
+    expiry = now + timedelta(hours=4)
+
+    result = execute_trade(
+        data["symbol"], data["side"], data["entry"], data["sl"], data["tp"]
+    )
+
+    cur.execute("""
+        INSERT INTO trades
+        (symbol, side, entry, sl, tp, status, created_at, expiry_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        result["symbol"], result["side"], result["entry"],
+        result["sl"], result["tp"], "ACTIVE",
+        now.isoformat(), expiry.isoformat()
+    ))
+
+    conn.commit()
+    return redirect("/admin")
+
+# =====================================================
+# 🧾 GENERATE ACCESS CODE
+# =====================================================
 @app.route("/generate")
 def generate():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
     expiry = datetime.now() + timedelta(days=1)
 
-    cur.execute(
-        "INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
-        (code, expiry.isoformat())
-    )
+    cur.execute("INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
+                (code, expiry.isoformat()))
     conn.commit()
 
-    return f"CODE: {code} (24h valid)"
+    return f"CODE: {code}"
 
+# =====================================================
+# 🔥 LIVE API
+# =====================================================
+@app.route("/api/live")
+def api():
+    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
+    trades = cur.fetchall()
 
-# ---------------- START ----------------
+    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 10")
+    posts = cur.fetchall()
+
+    return jsonify({"trades": trades, "posts": posts})
+
+# =====================================================
+# START
+# =====================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
