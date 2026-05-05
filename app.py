@@ -11,13 +11,14 @@ app.secret_key = os.getenv("SECRET_KEY", "change-this")
 # ================= CONFIG =================
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 UPLOAD_FOLDER = "static/uploads"
+LOGO_PATH = "static/logo.png"
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs("static", exist_ok=True)
 
 BG = "#0b1220"
 CARD = "#111a2e"
 ACCENT = "#38bdf8"
-
-LOGO = "/static/logo.png"  # <-- SAVE YOUR IMAGE AS static/logo.png
 
 # ================= DATABASE =================
 def db():
@@ -36,12 +37,6 @@ def init_db():
         account_code TEXT,
         trial_end TEXT,
         created_at TEXT
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS access_codes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT,
-        expiry TEXT
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS trades (
@@ -70,15 +65,35 @@ def init_db():
 
 init_db()
 
+# ================= COMMON FOOTER =================
+def footer(user=None):
+    account = user["account_code"] if user else "Your Account Code"
+    return f"""
+    <div style="padding:15px;margin:10px;background:{CARD};border-radius:12px">
+        <h3 style="color:{ACCENT}">Contacts</h3>
+        📞 <a href="tel:+254781585319" style="color:{ACCENT}">+254781585319</a><br>
+        📞 <a href="tel:+254717434943" style="color:{ACCENT}">+254717434943</a><br>
+        🎵 <a href="https://tiktok.com/@smartgoldsignals" style="color:{ACCENT}">TikTok</a>
+    </div>
+
+    <div style="padding:15px;margin:10px;background:{CARD};border-radius:12px">
+        <h3 style="color:{ACCENT}">Payments</h3>
+        💳 Lipa Na Mpesa<br>
+        🏦 Paybill: <b>322372</b><br>
+        🔢 Account: <b>{account}</b>
+    </div>
+    """
+
 # ================= HOME =================
 @app.route("/")
 def home():
+    logo_html = f'<img src="/{LOGO_PATH}" width="140">' if os.path.exists(LOGO_PATH) else "<h2>PESAMATRIX</h2>"
+
     return f"""
     <body style="background:{BG};color:white;font-family:Arial">
 
     <div style="text-align:center;padding:20px">
-        <img src="{LOGO}" width="150"><br>
-        <h2 style="color:{ACCENT}">PESAMATRIX</h2>
+        {logo_html}
     </div>
 
     <div style="display:flex;justify-content:space-between;padding:15px;background:#0f172a">
@@ -96,6 +111,9 @@ def home():
         <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/dashboard">👤 Dashboard</a></div>
 
     </div>
+
+    {footer()}
+
     </body>
     """
 
@@ -126,8 +144,8 @@ def register():
     return f"""
     <body style="background:{BG};color:white">
     <form method='post'>
-        <input name='name'><br>
-        <input name='contact'><br>
+        <input name='name'><br><br>
+        <input name='contact'><br><br>
         <button>Join</button>
     </form>
     </body>
@@ -179,21 +197,11 @@ def dashboard():
 
     <a href="/access">Signals</a><br>
     <a href="/mpesa">Pay</a>
+
+    {footer(user)}
+
     </body>
     """
-
-# ================= ACCESS =================
-@app.route("/access")
-def access():
-    if not session.get("user"):
-        return redirect("/user_login")
-
-    user = session["user"]
-
-    if datetime.now() > datetime.fromisoformat(user["trial_end"]):
-        return f"<body style='background:{BG};color:white'>Trial Expired</body>"
-
-    return redirect("/signals")
 
 # ================= SIGNALS =================
 @app.route("/signals")
@@ -208,24 +216,55 @@ def signals():
     for r in rows:
         out += f"""
         <div style='background:{CARD};padding:10px;margin:10px'>
-        📊 {r['symbol']}<br>
-        📥 Entry: {r['entry']}<br>
-        🎯 TP: {r['tp']}<br>
-        🛑 SL: {r['sl']}<br>
-        📌 Status: {r['status']}
+        {r['symbol']} | TP:{r['tp']} | {r['status']}
         </div>
         """
-    return out
+    return out + "</body>"
 
-# ================= ADMIN LOGIN =================
-@app.route("/login", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        if request.form["password"] == ADMIN_PASSWORD:
-            session["admin"] = True
-            return redirect("/admin")
+# ================= VIDEOS =================
+@app.route("/videos")
+def videos():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='video'")
+    rows = cur.fetchall()
+    conn.close()
 
-    return f"<body style='background:{BG};color:white'><form method='post'><input name='password'><button>Login</button></form></body>"
+    out = f"<body style='background:{BG};color:white'><h1>Videos</h1>"
+    for r in rows:
+        if "http" in r["media"]:
+            out += f"<iframe width='100%' height='200' src='{r['media']}'></iframe>"
+        else:
+            out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
+    return out + footer() + "</body>"
+
+# ================= NEWS =================
+@app.route("/news")
+def news():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white'><h1>News</h1>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+    return out + footer() + "</body>"
+
+# ================= POSTS =================
+@app.route("/posts")
+def posts():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white'><h1>Posts</h1>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+    return out + footer() + "</body>"
 
 # ================= ADMIN =================
 @app.route("/admin")
@@ -237,129 +276,48 @@ def admin():
     <body style="background:{BG};color:white">
     <h1>ADMIN</h1>
 
-    <a href="/generate_code">Generate Code</a><br>
-    <a href="/users">Users</a><br>
     <a href="/create_trade">Create Signal</a><br>
-    <a href="/manage_trades">Manage Trades</a><br>
     <a href="/upload">Upload Media</a><br>
+    <a href="/upload_logo">Upload Logo</a><br>
 
     </body>
     """
 
-# ================= CREATE TRADE =================
-@app.route("/create_trade", methods=["GET","POST"])
-def create_trade():
+# ================= UPLOAD LOGO =================
+@app.route("/upload_logo", methods=["GET","POST"])
+def upload_logo():
     if not session.get("admin"):
         return redirect("/login")
 
     if request.method == "POST":
-        conn = db()
-        cur = conn.cursor()
-
-        cur.execute("INSERT INTO trades VALUES (NULL,?,?,?,?,?,?,?,?)",
-                    (request.form["symbol"],
-                     request.form["side"],
-                     float(request.form["entry"]),
-                     float(request.form["sl"]),
-                     float(request.form["tp"]),
-                     "ACTIVE",
-                     datetime.now().isoformat(),
-                     (datetime.now()+timedelta(hours=4)).isoformat()))
-
-        conn.commit()
-        conn.close()
-        return redirect("/admin")
+        file = request.files["file"]
+        file.save(LOGO_PATH)
+        return redirect("/")
 
     return f"""
     <body style="background:{BG};color:white">
-    <h2>Create Signal</h2>
-    <form method='post'>
-    Pair:<br><input name='symbol'><br>
-    Side:<br><input name='side'><br>
-    Entry:<br><input name='entry'><br>
-    SL:<br><input name='sl'><br>
-    TP:<br><input name='tp'><br>
-    <button>Create</button>
-    </form>
-    </body>
-    """
-
-# ================= MANAGE TRADES =================
-@app.route("/manage_trades", methods=["GET","POST"])
-def manage_trades():
-    if not session.get("admin"):
-        return redirect("/login")
-
-    conn = db()
-    cur = conn.cursor()
-
-    if request.method == "POST":
-        cur.execute("UPDATE trades SET status=? WHERE id=?",
-                    (request.form["status"], request.form["id"]))
-        conn.commit()
-
-    cur.execute("SELECT * FROM trades")
-    rows = cur.fetchall()
-    conn.close()
-
-    out = f"<body style='background:{BG};color:white'><h2>Manage Trades</h2>"
-    for r in rows:
-        out += f"""
-        <div style='background:{CARD};margin:10px;padding:10px'>
-        {r['symbol']} | {r['status']}
-        <form method='post'>
-        <input type='hidden' name='id' value='{r['id']}'>
-        <select name='status'>
-        <option>ACTIVE</option>
-        <option>RUNNING</option>
-        <option>EXPIRED</option>
-        </select>
-        <button>Update</button>
-        </form>
-        </div>
-        """
-    return out
-
-# ================= UPLOAD =================
-@app.route("/upload", methods=["GET","POST"])
-def upload():
-    if not session.get("admin"):
-        return redirect("/login")
-
-    if request.method == "POST":
-        file = request.files.get("file")
-        link = request.form.get("link")
-
-        media_path = ""
-
-        if file and file.filename:
-            filename = secure_filename(file.filename)
-            media_path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(media_path)
-        elif link:
-            media_path = link
-
-        media_type = "video" if ".mp4" in media_path else "image"
-
-        conn = db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO posts VALUES (NULL,?,?,?,?,?)",
-                    (request.form["title"], request.form["content"], media_path, media_type, datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
-
-        return redirect("/admin")
-
-    return f"""
-    <body style="background:{BG};color:white">
-    <h2>Upload Media</h2>
+    <h2>Upload Logo</h2>
     <form method='post' enctype='multipart/form-data'>
-    Title:<br><input name='title'><br>
-    Content:<br><input name='content'><br>
-    File:<br><input type='file' name='file'><br>
-    OR Link:<br><input name='link'><br>
+    <input type='file' name='file'>
     <button>Upload</button>
     </form>
+    </body>
+    """
+
+# ================= MPESA =================
+@app.route("/mpesa")
+def mpesa():
+    user = session.get("user")
+    account = user["account_code"] if user else "Your Code"
+
+    return f"""
+    <body style="background:{BG};color:white">
+    <h2>Mpesa Payment</h2>
+
+    Paybill: 322372<br>
+    Account: {account}<br><br>
+
+    After payment contact admin
     </body>
     """
 
