@@ -41,6 +41,17 @@ CREATE TABLE IF NOT EXISTS notifications (
 )
 """)
 
+# 🆕 POSTS TABLE (CONTENT SYSTEM)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    content TEXT,
+    media_url TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()
 
 # ---------------- TRADE LOGIC ----------------
@@ -66,7 +77,7 @@ def home():
             .card { background:#1e293b; padding:20px; margin:20px auto; width:350px; border-radius:10px; }
             input { width:100%; padding:10px; margin:5px 0; }
             button { width:100%; padding:10px; background:#22c55e; color:white; border:none; cursor:pointer; }
-            a { color:#38bdf8; }
+            a { color:#38bdf8; display:block; margin:5px; }
         </style>
     </head>
     <body>
@@ -75,7 +86,6 @@ def home():
 
         <div class="card">
             <h3>Create Signal</h3>
-
             <form action="/trade" method="post">
                 <input name="symbol" placeholder="Symbol" required>
                 <input name="side" placeholder="BUY / SELL" required>
@@ -86,9 +96,20 @@ def home():
             </form>
         </div>
 
-        <a href="/signals">📊 Signals</a><br>
-        <a href="/notifications">🔔 Notifications</a><br>
-        <a href="/access">🔐 Access</a><br>
+        <div class="card">
+            <h3>📢 Post Trading Content</h3>
+            <form action="/post" method="post">
+                <input name="title" placeholder="Title" required>
+                <input name="content" placeholder="Content / News" required>
+                <input name="media_url" placeholder="Image or Video URL (optional)">
+                <button type="submit">POST</button>
+            </form>
+        </div>
+
+        <a href="/signals">📊 Signals</a>
+        <a href="/posts">📰 Trading Feed</a>
+        <a href="/notifications">🔔 Notifications</a>
+        <a href="/access">🔐 Access</a>
         <a href="/generate">🧾 Generate Code</a>
 
     </body>
@@ -113,7 +134,6 @@ def trade():
         (result["symbol"], result["side"], result["entry"], result["sl"], result["tp"], result["status"])
     )
 
-    # notification
     message = f"📢 {result['symbol']} {result['side']} @ {result['entry']}"
     cur.execute(
         "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
@@ -122,6 +142,60 @@ def trade():
 
     conn.commit()
     return jsonify(result)
+
+# ---------------- CONTENT POST (NEW FEATURE) ----------------
+@app.route("/post", methods=["POST"])
+def post():
+    title = request.form["title"]
+    content = request.form["content"]
+    media_url = request.form.get("media_url", "")
+
+    cur.execute("""
+        INSERT INTO posts (title, content, media_url, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (title, content, media_url, datetime.now().isoformat()))
+
+    conn.commit()
+
+    return jsonify({"status": "post created"})
+
+# ---------------- POSTS PAGE (TRADING FEED) ----------------
+@app.route("/posts")
+def posts():
+    cur.execute("SELECT * FROM posts ORDER BY id DESC")
+    rows = cur.fetchall()
+
+    html = """
+    <html>
+    <head>
+        <title>Trading Feed</title>
+        <style>
+            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
+            .box { background:#1e293b; margin:15px auto; padding:15px; width:320px; border-radius:10px; }
+            img, iframe { width:100%; border-radius:8px; margin-top:10px; }
+        </style>
+    </head>
+    <body>
+        <h1>📰 Trading Feed</h1>
+    """
+
+    for r in rows:
+        html += f"""
+        <div class="box">
+            <h3>{r[1]}</h3>
+            <p>{r[2]}</p>
+        """
+
+        if r[3]:
+            if "youtube" in r[3]:
+                html += f'<iframe src="{r[3]}" frameborder="0"></iframe>'
+            else:
+                html += f'<img src="{r[3]}">'
+
+        html += "</div>"
+
+    html += "</body></html>"
+    return render_template_string(html)
 
 # ---------------- NOTIFICATIONS ----------------
 @app.route("/notifications")
@@ -153,7 +227,7 @@ def notifications():
     html += "</body></html>"
     return render_template_string(html)
 
-# ---------------- ACCESS (FIXED UI) ----------------
+# ---------------- ACCESS ----------------
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -169,83 +243,14 @@ def access():
                 session["access"] = True
                 return redirect("/signals")
 
-        return render_template_string("""
-        <html>
-        <head>
-            <style>
-                body {
-                    margin:0;
-                    font-family: Arial;
-                    background:#0f172a;
-                    color:white;
-                    display:flex;
-                    justify-content:center;
-                    align-items:center;
-                    height:100vh;
-                }
-                .box {
-                    background:#1e293b;
-                    padding:30px;
-                    border-radius:12px;
-                    text-align:center;
-                }
-                a { color:#38bdf8; }
-            </style>
-        </head>
-        <body>
-            <div class="box">
-                <h2>❌ Invalid Code</h2>
-                <a href="/access">Try again</a>
-            </div>
-        </body>
-        </html>
-        """)
+        return "Invalid or expired code ❌"
 
     return render_template_string("""
-    <html>
-    <head>
-        <style>
-            body {
-                margin:0;
-                font-family: Arial;
-                background:#0f172a;
-                color:white;
-                display:flex;
-                justify-content:center;
-                align-items:center;
-                height:100vh;
-            }
-            .box {
-                background:#1e293b;
-                padding:30px;
-                border-radius:12px;
-                text-align:center;
-                width:300px;
-            }
-            input, button {
-                width:100%;
-                padding:12px;
-                margin-top:10px;
-                border:none;
-                border-radius:6px;
-            }
-            button {
-                background:#22c55e;
-                color:white;
-                cursor:pointer;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="box">
-            <h2>🔐 Access</h2>
-            <form method="post">
-                <input name="code" placeholder="Enter code" required>
-                <button>Unlock</button>
-            </form>
-        </div>
-    </body>
-    </html>
+    <h2>Subscriber Access</h2>
+    <form method="post">
+        <input name="code" placeholder="ACCESS CODE" required>
+        <button type="submit">Unlock</button>
+    </form>
     """)
 
 # ---------------- SIGNALS ----------------
