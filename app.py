@@ -17,19 +17,6 @@ BG = "#0b1220"
 CARD = "#111a2e"
 ACCENT = "#38bdf8"
 
-CONTACTS = """
-📞 <a href="tel:+254781585319" style="color:#38bdf8">+254 781 585 319</a><br>
-📞 <a href="tel:+254717434943" style="color:#38bdf8">+254 717 434 943</a><br>
-📧 support@pesamatrix.com<br>
-🎵 TikTok: <a href="https://tiktok.com/@smartgoldsignals" style="color:#38bdf8">@smartgoldsignals</a>
-"""
-
-PAYMENTS = """
-💳 Lipa Na Mpesa<br>
-🏦 Paybill: <b>322372</b><br>
-🔢 Account: <b>Your Unique Join Code</b>
-"""
-
 # ================= DATABASE =================
 def db():
     conn = sqlite3.connect("app.db")
@@ -41,8 +28,6 @@ def init_db():
     conn = db()
     cur = conn.cursor()
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)""")
-
     cur.execute("""CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
@@ -50,6 +35,12 @@ def init_db():
         account_code TEXT,
         trial_end TEXT,
         created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS access_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT,
+        expiry TEXT
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS trades (
@@ -64,12 +55,6 @@ def init_db():
         expiry_at TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS access_codes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT,
-        expiry TEXT
-    )""")
-
     cur.execute("""CREATE TABLE IF NOT EXISTS posts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
@@ -82,13 +67,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 init_db()
 
 # ================= HOME =================
 @app.route("/")
 def home():
-    return render_template_string(f"""
+    return f"""
     <body style="background:{BG};color:white;font-family:Arial">
 
     <div style="display:flex;justify-content:space-between;padding:15px;background:#0f172a">
@@ -98,51 +82,19 @@ def home():
 
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:15px">
 
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/videos">🎥 Free Videos</a>
-        </div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/videos">🎥 Free Videos</a></div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/news">📰 Trading News</a></div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/access">🔐 Premium Signals</a></div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/posts">📊 Latest Posts</a></div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/register">🟢 Join</a></div>
+        <div style="background:{CARD};padding:18px;border-radius:12px"><a href="/dashboard">👤 Dashboard</a></div>
 
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/news">📰 Trading News</a>
-        </div>
-
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/access">🔐 Premium Signals</a>
-        </div>
-
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/posts">📊 Latest Posts</a>
-        </div>
-
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/register">🟢 Join</a>
-        </div>
-
-        <div style="background:{CARD};padding:18px;border-radius:12px;text-align:center">
-            <a href="/dashboard">👤 Dashboard</a>
-        </div>
-
-    </div>
-
-    <div style="padding:15px;background:{CARD};margin:10px;border-radius:12px">
-        <h3>About</h3>
-        <p>We deliver high accuracy trading signals in real time.</p>
-    </div>
-
-    <div style="padding:15px;background:{CARD};margin:10px;border-radius:12px">
-        <h3>Contacts</h3>
-        {CONTACTS}
-    </div>
-
-    <div style="padding:15px;background:{CARD};margin:10px;border-radius:12px">
-        <h3>Payments</h3>
-        {PAYMENTS}
     </div>
 
     </body>
-    """)
+    """
 
-# ================= REGISTER (NOW WITH 4 DAY TRIAL) =================
+# ================= REGISTER =================
 @app.route("/register", methods=["GET","POST"])
 def register():
     if request.method == "POST":
@@ -151,75 +103,32 @@ def register():
 
         conn = db()
         cur = conn.cursor()
-        cur.execute("""
-        INSERT INTO users VALUES (NULL,?,?,?,?,?)
-        """, (
-            request.form["name"],
-            request.form["contact"],
-            code,
-            trial_end.isoformat(),
-            datetime.now().isoformat()
-        ))
+        cur.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
+                    (request.form["name"], request.form["contact"], code,
+                     trial_end.isoformat(), datetime.now().isoformat()))
         conn.commit()
         conn.close()
 
         return f"""
         <body style="background:{BG};color:white">
-        <h2>WELCOME 🎉</h2>
-        <p>Your Account Code:</p>
+        <h2>JOIN SUCCESS</h2>
         <h1 style="color:{ACCENT}">{code}</h1>
-        <p>🆓 Free Trial: 4 Days Active</p>
-        <a href="/dashboard">Go to Dashboard</a>
+        <p>Free Trial: 4 Days</p>
+        <a href="/user_login">Login</a>
         </body>
         """
 
     return f"""
     <body style="background:{BG};color:white">
     <form method='post'>
-        <input name='name' placeholder='Name'><br><br>
-        <input name='contact' placeholder='Contact'><br><br>
+        <input name='name'><br>
+        <input name='contact'><br>
         <button>Join</button>
     </form>
     </body>
     """
 
-# ================= USER DASHBOARD (NEW) =================
-@app.route("/dashboard")
-def dashboard():
-    if not session.get("user"):
-        return redirect("/user_login")
-
-    user = session["user"]
-    now = datetime.now()
-
-    trial_end = datetime.fromisoformat(user["trial_end"])
-    active = now < trial_end
-
-    status = "ACTIVE 🟢" if active else "EXPIRED 🔴"
-
-    return f"""
-    <body style="background:{BG};color:white;font-family:Arial">
-
-    <h1 style="color:{ACCENT}">👤 USER DASHBOARD</h1>
-
-    <div style="background:{CARD};padding:15px;border-radius:12px;margin:10px">
-        <p><b>Name:</b> {user['name']}</p>
-        <p><b>Account Code:</b> {user['account_code']}</p>
-        <p><b>Trial Status:</b> {status}</p>
-        <p><b>Expiry:</b> {user['trial_end']}</p>
-    </div>
-
-    <div style="background:{CARD};padding:15px;border-radius:12px;margin:10px">
-        <a href="/videos">🎥 Videos</a><br>
-        <a href="/news">📰 News</a><br>
-        <a href="/posts">📊 Posts</a><br>
-        <a href="/access">🔐 Signals</a>
-    </div>
-
-    </body>
-    """
-
-# ================= USER LOGIN (AUTO SESSION) =================
+# ================= USER LOGIN =================
 @app.route("/user_login", methods=["GET","POST"])
 def user_login():
     if request.method == "POST":
@@ -235,59 +144,181 @@ def user_login():
             session["user"] = dict(user)
             return redirect("/dashboard")
 
-        return "Invalid Code"
+        return "Invalid"
 
-    return """
-    <body style="background:#0b1220;color:white">
+    return f"""
+    <body style="background:{BG};color:white">
     <form method='post'>
-        <input name='code' placeholder='Enter Account Code'>
+        <input name='code' placeholder='Account Code'>
         <button>Login</button>
     </form>
     </body>
     """
 
-# ================= SIGNAL ACCESS CHECK (UPDATED) =================
-@app.route("/access")
-def access_gate():
+# ================= DASHBOARD =================
+@app.route("/dashboard")
+def dashboard():
     if not session.get("user"):
         return redirect("/user_login")
 
     user = session["user"]
-    trial_end = datetime.fromisoformat(user["trial_end"])
 
-    if datetime.now() > trial_end:
-        return "<body style='background:#0b1220;color:white'><h2>Trial Expired ❌</h2><p>Please upgrade.</p></body>"
+    return f"""
+    <body style="background:{BG};color:white">
 
-    session["access"] = True
+    <h1 style="color:{ACCENT}">Dashboard</h1>
+
+    <div style="background:{CARD};padding:15px">
+    Name: {user['name']}<br>
+    Code: {user['account_code']}
+    </div>
+
+    <a href="/access">Signals</a><br>
+    <a href="/mpesa">Pay</a>
+
+    </body>
+    """
+
+# ================= ACCESS =================
+@app.route("/access")
+def access():
+    if not session.get("user"):
+        return redirect("/user_login")
+
+    user = session["user"]
+
+    if datetime.now() > datetime.fromisoformat(user["trial_end"]):
+        return f"<body style='background:{BG};color:white'>Trial Expired</body>"
+
     return redirect("/signals")
 
-
-# ================= KEEP YOUR ORIGINAL SIGNALS =================
+# ================= SIGNALS =================
 @app.route("/signals")
 def signals():
-    if not session.get("access"):
-        return redirect("/access")
-
     conn = db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    cur.execute("SELECT * FROM trades")
     rows = cur.fetchall()
     conn.close()
 
-    out = f"<body style='background:{BG};color:white'><h1>🔐 SIGNALS</h1>"
-
+    out = f"<body style='background:{BG};color:white'><h1>Signals</h1>"
     for r in rows:
-        out += f"""
-        <div style='background:{CARD};margin:10px;padding:15px;border-radius:12px'>
-            📊 {r['symbol']}<br>
-            📥 Entry: {r['entry']}<br>
-            🎯 TP: {r['tp']}<br>
-            🛑 SL: {r['sl']}
-        </div>
-        """
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['symbol']} | TP:{r['tp']}</div>"
+    return out
 
-    return out + "</body>"
+# ================= VIDEOS =================
+@app.route("/videos")
+def videos():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='video'")
+    rows = cur.fetchall()
+    conn.close()
 
+    out = f"<body style='background:{BG};color:white'><h1>Videos</h1>"
+    for r in rows:
+        out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
+    return out
+
+# ================= NEWS =================
+@app.route("/news")
+def news():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white'><h1>News</h1>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+    return out
+
+# ================= POSTS =================
+@app.route("/posts")
+def posts():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white'><h1>Posts</h1>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+    return out
+
+# ================= ADMIN =================
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        if request.form["password"] == ADMIN_PASSWORD:
+            session["admin"] = True
+            return redirect("/admin")
+
+    return f"<body style='background:{BG};color:white'><form method='post'><input name='password'><button>Login</button></form></body>"
+
+@app.route("/admin")
+def admin():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    return f"""
+    <body style="background:{BG};color:white">
+    <h1>ADMIN</h1>
+    <a href="/generate_code">Generate Code</a><br>
+    <a href="/users">Users</a>
+    </body>
+    """
+
+# ================= GENERATE CODE (24hrs) =================
+@app.route("/generate_code")
+def generate_code():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    code = str(uuid.uuid4())[:8].upper()
+    expiry = datetime.now() + timedelta(hours=24)
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("INSERT INTO access_codes VALUES (NULL,?,?)", (code, expiry.isoformat()))
+    conn.commit()
+    conn.close()
+
+    return f"<body style='background:{BG};color:white'>CODE: {code}</body>"
+
+# ================= USERS TABLE =================
+@app.route("/users")
+def users():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white'><h1>Users</h1>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['name']} | {r['account_code']}</div>"
+    return out
+
+# ================= MPESA MANUAL =================
+@app.route("/mpesa")
+def mpesa():
+    return f"""
+    <body style="background:{BG};color:white">
+
+    <h2>Lipa Na Mpesa</h2>
+    <p>Paybill: 322372</p>
+    <p>Account: Your Account Code</p>
+
+    <p>After payment contact admin for activation</p>
+
+    </body>
+    """
 
 # ================= START =================
 if __name__ == "__main__":
