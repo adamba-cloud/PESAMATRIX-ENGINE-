@@ -192,16 +192,45 @@ def signals():
 # ================= MEDIA =================
 @app.route("/media")
 def media():
-    conn=db();cur=conn.cursor()
-    rows=cur.execute("SELECT * FROM media").fetchall()
+    conn = db()
+    cur = conn.cursor()
+    rows = cur.execute("SELECT * FROM media").fetchall()
     conn.close()
 
-    out=header("MEDIA")
+    out = header("MEDIA GALLERY")
+
+    if not rows:
+        out += card("No media uploaded yet")
+
     for m in rows:
+
+        # ===== IMAGE / VIDEO FILE =====
         if m["filename"]:
-            out+=f"<img src='/static/uploads/{m['filename']}' width='100%'>"
+            out += card(f"""
+                <img src='/static/uploads/{m["filename"]}' 
+                style='width:100%;border-radius:10px'>
+            """)
+
+        # ===== VIDEO LINK =====
         if m["link"]:
-            out+=f"<iframe width='100%' height='200' src='{m['link']}'></iframe>"
+            link = m["link"]
+
+            # convert normal YouTube link to embed
+            if "youtube.com/watch?v=" in link:
+                link = link.replace("watch?v=", "embed/")
+
+            if "youtu.be/" in link:
+                link = link.replace("youtu.be/", "youtube.com/embed/")
+
+            out += card(f"""
+                <iframe width='100%' height='250'
+                src='{link}'
+                frameborder='0'
+                allowfullscreen
+                style='border-radius:10px'>
+                </iframe>
+            """)
+
     return layout(out)
 
 # ================= NEWS =================
