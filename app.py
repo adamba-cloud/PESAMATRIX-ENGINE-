@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS access_codes (
 )
 """)
 
+# 🔔 NOTIFICATIONS TABLE (NEW UPGRADE)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()
 
 # ---------------- TRADE LOGIC ----------------
@@ -80,6 +89,7 @@ def home():
         </div>
 
         <a href="/signals">📊 View Live Signals</a><br>
+        <a href="/notifications">🔔 Notifications</a><br>
         <a href="/access">🔐 Subscriber Access</a><br>
         <a href="/generate">🧾 Generate Access Code</a>
 
@@ -87,7 +97,7 @@ def home():
     </html>
     """)
 
-# ---------------- TRADE ROUTE ----------------
+# ---------------- TRADE ROUTE + NOTIFICATIONS ----------------
 @app.route("/trade", methods=["POST"])
 def trade():
     data = request.form
@@ -100,6 +110,7 @@ def trade():
         data["tp"]
     )
 
+    # SAVE TRADE
     cur.execute(
         "INSERT INTO trades (symbol, side, entry, sl, tp, status) VALUES (?, ?, ?, ?, ?, ?)",
         (
@@ -111,11 +122,56 @@ def trade():
             result["status"]
         )
     )
+
+    # 🔔 CREATE NOTIFICATION (NEW FEATURE)
+    message = f"📢 New Signal: {result['symbol']} {result['side']} @ {result['entry']}"
+
+    cur.execute(
+        "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
+        (message, datetime.now().isoformat())
+    )
+
     conn.commit()
 
     return jsonify(result)
 
-# ---------------- ACCESS PAGE (FIXED VERSION) ----------------
+# ---------------- NOTIFICATIONS PAGE ----------------
+@app.route("/notifications")
+def notifications():
+    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 20")
+    rows = cur.fetchall()
+
+    html = """
+    <html>
+    <head>
+        <title>Notifications</title>
+        <style>
+            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
+            .box {
+                background:#1e293b;
+                margin:15px auto;
+                padding:15px;
+                width:350px;
+                border-radius:10px;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🔔 LIVE NOTIFICATIONS</h1>
+    """
+
+    for r in rows:
+        html += f"""
+        <div class="box">
+            <p>{r[1]}</p>
+            <small>{r[2]}</small>
+        </div>
+        """
+
+    html += "</body></html>"
+    return render_template_string(html)
+
+# ---------------- ACCESS PAGE ----------------
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -131,79 +187,17 @@ def access():
                 session["access"] = True
                 return redirect("/signals")
 
-        return render_template_string("""
-        <html>
-        <head>
-            <style>
-                body {
-                    font-family: Arial;
-                    background: #0f172a;
-                    color: white;
-                    text-align: center;
-                }
-                .box {
-                    margin-top: 120px;
-                }
-                a { color:#38bdf8; }
-            </style>
-        </head>
-        <body>
-            <div class="box">
-                <h2>❌ Invalid or Expired Code</h2>
-                <a href="/access">Try Again</a>
-            </div>
-        </body>
-        </html>
-        """)
+        return "Invalid or expired code ❌"
 
     return render_template_string("""
-    <html>
-    <head>
-        <title>Subscriber Access</title>
-        <style>
-            body {
-                font-family: Arial;
-                background: #0f172a;
-                color: white;
-                text-align: center;
-            }
-            .box {
-                margin-top: 120px;
-            }
-            input {
-                padding: 12px;
-                width: 250px;
-                border-radius: 6px;
-                border: none;
-            }
-            button {
-                padding: 12px;
-                width: 250px;
-                margin-top: 10px;
-                background: #22c55e;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                cursor: pointer;
-            }
-        </style>
-    </head>
-
-    <body>
-        <div class="box">
-            <h2>🔐 Subscriber Access</h2>
-            <p>Enter your daily access code</p>
-
-            <form method="post">
-                <input name="code" placeholder="ACCESS CODE" required><br>
-                <button type="submit">UNLOCK SIGNALS</button>
-            </form>
-        </div>
-    </body>
-    </html>
+    <h2>Subscriber Access</h2>
+    <form method="post">
+        <input name="code" placeholder="ACCESS CODE" required>
+        <button type="submit">Unlock</button>
+    </form>
     """)
 
-# ---------------- SIGNALS (SUBSCRIBERS) ----------------
+# ---------------- SIGNALS ----------------
 @app.route("/signals")
 def signals():
     if not session.get("access"):
