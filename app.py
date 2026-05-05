@@ -103,69 +103,56 @@ def home():
     </body>
     """
 
-# ================= REGISTER =================
-@app.route("/register", methods=["GET","POST"])
-def register():
-    if request.method == "POST":
-        code = str(uuid.uuid4())[:8].upper()
-        trial_end = datetime.now() + timedelta(days=4)
+# ================= VIDEOS =================
+@app.route("/videos")
+def videos():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='video'")
+    rows = cur.fetchall()
+    conn.close()
 
-        conn = db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
-                    (request.form["name"], request.form["phone"], code,
-                     trial_end.isoformat(), datetime.now().isoformat()))
-        conn.commit()
-        conn.close()
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>🎥 Free Videos</h2>"
 
-        return f"<body style='background:{BG};color:white;{TEXT}'>Account Code: <b>{code}</b><br><a href='/user_login'>Login</a></body>"
+    for r in rows:
+        if r["media"].startswith("http"):
+            out += f"<iframe width='100%' height='200' src='{r['media']}'></iframe>"
+        else:
+            out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
 
-    return f"""
-    <body style="background:{BG};color:white;{TEXT}">
-    <form method='post'>
-    Name:<br><input name='name'><br><br>
-    Phone Number:<br><input name='phone'><br><br>
-    <button>Join</button>
-    </form>
-    </body>
-    """
+    return out + "</body>"
 
-# ================= LOGIN =================
-@app.route("/user_login", methods=["GET","POST"])
-def user_login():
-    if request.method == "POST":
-        conn = db()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE account_code=?", (request.form["code"],))
-        user = cur.fetchone()
-        conn.close()
+# ================= NEWS =================
+@app.route("/news")
+def news():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='news'")
+    rows = cur.fetchall()
+    conn.close()
 
-        if user:
-            session["user"] = dict(user)
-            return redirect("/dashboard")
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>📰 Trading News</h2>"
 
-    return f"<body style='background:{BG};color:white;{TEXT}'><form method='post'>Account Code:<br><input name='code'><button>Login</button></form></body>"
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}<br>{r['content']}</div>"
 
-# ================= DASHBOARD =================
-@app.route("/dashboard")
-def dashboard():
-    if not session.get("user"):
-        return redirect("/user_login")
+    return out + "</body>"
 
-    user = session["user"]
-    status = "ACTIVE" if datetime.now() < datetime.fromisoformat(user["trial_end"]) else "EXPIRED"
+# ================= POSTS =================
+@app.route("/posts")
+def posts():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='post'")
+    rows = cur.fetchall()
+    conn.close()
 
-    return f"""
-    <body style="background:{BG};color:white;{TEXT}">
-    <h2 style="color:{ACCENT}">User Dashboard</h2>
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>📊 Latest Posts</h2>"
 
-    Name: {user['name']}<br>
-    Account: {user['account_code']}<br>
-    Status: {status}<br><br>
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
 
-    <a href="/access" style="color:{ACCENT}">View Signals</a>
-    </body>
-    """
+    return out + "</body>"
 
 # ================= SIGNALS =================
 @app.route("/signals")
@@ -182,24 +169,16 @@ def signals():
         out += f"""
         <div style='background:{CARD};margin:10px;padding:15px;border-radius:10px'>
         <b style='color:{ACCENT}'>{r['symbol']}</b><br><br>
-        Entry Point: {r['entry']}<br>
-        Take Profit (TP): {r['tp']}<br>
-        Stop Loss (SL): {r['sl']}<br>
-        Status: <b>{r['status']}</b>
+        Entry: {r['entry']}<br>
+        TP: {r['tp']}<br>
+        SL: {r['sl']}<br>
+        Status: {r['status']}
         </div>
         """
-    return out
+
+    return out + "</body>"
 
 # ================= ADMIN =================
-@app.route("/login", methods=["GET","POST"])
-def login():
-    if request.method == "POST":
-        if request.form["password"] == ADMIN_PASSWORD:
-            session["admin"] = True
-            return redirect("/admin")
-
-    return "<form method='post'><input name='password'><button>Login</button></form>"
-
 @app.route("/admin")
 def admin():
     if not session.get("admin"):
@@ -219,55 +198,30 @@ def admin():
     </body>
     """
 
-# ================= CREATE TRADE =================
-@app.route("/create_trade", methods=["GET","POST"])
-def create_trade():
-    if request.method == "POST":
-        conn = db()
-        cur = conn.cursor()
-        cur.execute("INSERT INTO trades VALUES (NULL,?,?,?,?,?,?,?,?)",
-                    (request.form["pair"],
-                     "BUY",
-                     request.form["entry"],
-                     request.form["sl"],
-                     request.form["tp"],
-                     "ACTIVE",
-                     datetime.now(),
-                     datetime.now()))
-        conn.commit()
-        conn.close()
-        return redirect("/admin")
-
-    return f"""
-    <body style="background:{BG};color:white;{TEXT}">
-    Pair:<br><input name='pair'><br>
-    Entry Point:<br><input name='entry'><br>
-    Take Profit (TP):<br><input name='tp'><br>
-    Stop Loss (SL):<br><input name='sl'><br>
-    <button>Create</button>
-    </body>
-    """
-
-# ================= OTHER ROUTES =================
+# ================= MANAGE TRADES =================
 @app.route("/manage_trades")
 def manage_trades():
-    return "<h2>Manage Trades Working</h2>"
+    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Manage Trades Working</h2></body>"
 
+# ================= UPLOAD =================
 @app.route("/upload", methods=["GET","POST"])
 def upload():
-    return "<h2>Upload Page Working</h2>"
+    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Upload Media Working</h2></body>"
 
+# ================= GENERATE CODE =================
 @app.route("/generate_code")
 def generate_code():
-    return "<h2>Code Generated</h2>"
+    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Code Generated</h2></body>"
 
+# ================= USERS =================
 @app.route("/users")
 def users():
-    return "<h2>Users List</h2>"
+    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Users List</h2></body>"
 
+# ================= CREATE NEWS =================
 @app.route("/create_news")
 def create_news():
-    return "<h2>Create News Page</h2>"
+    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Create News Page</h2></body>"
 
 # ================= START =================
 if __name__ == "__main__":
