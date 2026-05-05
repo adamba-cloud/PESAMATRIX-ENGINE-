@@ -1,152 +1,151 @@
 import os
 import sqlite3
-import random
-import string
 from datetime import datetime, timedelta
-
 from flask import Flask, request, redirect, session, render_template_string
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = os.getenv("SECRET_KEY", "change-this")
 
-# ================= ADMIN SECURITY =================
-ADMIN_PASSWORD = "admin123"
-
-# ================= UPLOAD CONFIG =================
+# ================= CONFIG =================
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# ================= DATABASE =================
-conn = sqlite3.connect("trades.db", check_same_thread=False)
-cur = conn.cursor()
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT,
-    side TEXT,
-    entry REAL,
-    sl REAL,
-    tp REAL,
-    status TEXT,
-    created_at TEXT,
-    expiry_at TEXT
-)
-""")
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS access_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT UNIQUE,
-    expiry_date TEXT
-)
-""")
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    contact TEXT,
-    created_at TEXT
-)
-""")
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    content TEXT,
-    media_url TEXT,
-    media_type TEXT,
-    created_at TEXT
-)
-""")
-
-conn.commit()
+# ================= DB =================
+def db():
+    conn = sqlite3.connect("app.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-# ================= ROOT =================
-@app.route("/")
-def root():
-    return redirect("/public")
+def init_db():
+    conn = db()
+    cur = conn.cursor()
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT,
+        side TEXT,
+        entry REAL,
+        sl REAL,
+        tp REAL,
+        status TEXT,
+        created_at TEXT,
+        expiry_at TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS access_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT,
+        expiry TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        content TEXT,
+        media TEXT,
+        type TEXT,
+        created_at TEXT
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+# ================= HELPERS =================
+def get_setting(key, default=""):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM settings WHERE key=?", (key,))
+    row = cur.fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+
+def set_setting(key, value):
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
+    conn.commit()
+    conn.close()
 
 # ================= PUBLIC PAGE =================
-@app.route("/public")
+@app.route("/")
 def public():
+    conn = db()
+    cur = conn.cursor()
+
     cur.execute("SELECT * FROM posts ORDER BY id DESC")
     posts = cur.fetchall()
 
     html_posts = ""
-
     for p in posts:
         media = ""
-
-        if p[4] == "image":
-            media = f"<img src='/{p[3]}' style='width:100%;border-radius:10px;'>"
-
-        elif p[4] == "video":
+        if p["type"] == "image":
+            media = f"<img src='/{p['media']}' style='width:100%;border-radius:10px;'>"
+        elif p["type"] == "video":
             media = f"""
             <video controls style="width:100%;border-radius:10px;">
-                <source src="/{p[3]}" type="video/mp4">
+                <source src="/{p['media']}">
             </video>
             """
 
         html_posts += f"""
         <div style="background:#1e293b;margin:10px;padding:15px;border-radius:12px">
-            <h3>{p[1]}</h3>
-            <p>{p[2]}</p>
+            <h3>{p['title']}</h3>
+            <p>{p['content']}</p>
             {media}
         </div>
         """
 
-    return f"""
+    conn.close()
+
+    return render_template_string(f"""
     <html>
     <head>
         <title>PESAMATRIX</title>
         <style>
             body {{
                 margin:0;
-                font-family:Arial;
-                background:#0f172a;
+                font-family:{get_setting("font","Arial")};
+                background:{get_setting("bg","#0f172a")};
                 color:white;
             }}
-
             .nav {{
                 display:flex;
                 justify-content:space-between;
                 padding:15px;
                 background:#111827;
             }}
-
             .hero {{
                 text-align:center;
                 padding:50px;
             }}
-
             .hero h1 {{
-                font-size:40px;
                 color:#38bdf8;
             }}
-
             .section {{
                 padding:20px;
             }}
-
-            input,button {{
-                padding:10px;
-                margin-top:8px;
-                width:250px;
-                border:none;
-                border-radius:8px;
-            }}
-
-            button {{
-                background:#22c55e;
-                color:white;
-                cursor:pointer;
+            a {{
+                color:#38bdf8;
             }}
         </style>
     </head>
@@ -154,8 +153,8 @@ def public():
     <body>
 
     <div class="nav">
-        <h2>🚀 PESAMATRIX</h2>
-        <a href="/login" style="color:#38bdf8;">Admin</a>
+        <h2>{get_setting("logo","🚀 PESAMATRIX")}</h2>
+        <a href="/login">Admin</a>
     </div>
 
     <div class="hero">
@@ -165,12 +164,12 @@ def public():
 
     <div class="section">
         <h2>About</h2>
-        <p>We deliver high accuracy trading signals in real time.</p>
+        <p>{get_setting("about","We deliver high accuracy trading signals in real time.")}</p>
 
         <h2>Contacts</h2>
-        <p>📞 +254 700 000 000</p>
-        <p>📧 support@pesamatrix.com</p>
-        <p>📱 Telegram | Instagram | Twitter</p>
+        <p>{get_setting("phone","+254 700 000 000")}</p>
+        <p>{get_setting("email","support@pesamatrix.com")}</p>
+        <p>{get_setting("social","Telegram | Instagram | Twitter")}</p>
 
         <h2>Services</h2>
         <p>🎥 Free Videos</p>
@@ -187,30 +186,18 @@ def public():
     <div class="section">
         <h2>Join</h2>
         <form action="/register" method="post">
-            <input name="name" placeholder="Name"><br>
-            <input name="contact" placeholder="Phone or Email"><br>
+            <input name="name" placeholder="Name"><br><br>
+            <input name="contact" placeholder="Contact"><br><br>
             <button>Join</button>
         </form>
     </div>
 
     </body>
     </html>
-    """
+    """)
 
-
-# ================= REGISTER =================
-@app.route("/register", methods=["POST"])
-def register():
-    cur.execute(
-        "INSERT INTO users (name, contact, created_at) VALUES (?, ?, ?)",
-        (request.form["name"], request.form["contact"], datetime.now().isoformat())
-    )
-    conn.commit()
-    return redirect("/public")
-
-
-# ================= LOGIN =================
-@app.route("/login", methods=["GET", "POST"])
+# ================= ADMIN LOGIN =================
+@app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
         if request.form["password"] == ADMIN_PASSWORD:
@@ -218,120 +205,106 @@ def login():
             return redirect("/admin")
         return "Wrong password"
 
-    return """
-    <form method="post">
-        <input name="password" placeholder="Admin Password">
-        <button>Login</button>
-    </form>
-    """
+    return "<form method='post'><input name='password'><button>Login</button></form>"
 
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
-
+    return redirect("/")
 
 # ================= ADMIN DASHBOARD =================
-@app.route("/admin")
+@app.route("/admin", methods=["GET","POST"])
 def admin():
     if not session.get("admin"):
         return redirect("/login")
 
-    cur.execute("SELECT * FROM trades ORDER BY id DESC")
-    trades = cur.fetchall()
+    if request.method == "POST":
+        for key in ["about","phone","email","social","logo","bg","font"]:
+            if key in request.form:
+                set_setting(key, request.form[key])
 
     return render_template_string("""
     <body style="background:#0f172a;color:white;font-family:Arial">
 
-    <h1>🚀 ADMIN DASHBOARD</h1>
+    <h1>🚀 SAAS ADMIN</h1>
 
-    <a href="/logout">Logout</a>
-
-    <h3>Create Trade</h3>
-    <form action="/trade" method="post">
-        <input name="symbol" placeholder="Symbol"><br>
-        <input name="side"><br>
-        <input name="entry"><br>
-        <input name="sl"><br>
-        <input name="tp"><br>
-        <button>Create</button>
+    <h3>Website Settings</h3>
+    <form method="post">
+        <input name="about" placeholder="About"><br>
+        <input name="phone" placeholder="Phone"><br>
+        <input name="email" placeholder="Email"><br>
+        <input name="social" placeholder="Social Links"><br>
+        <input name="logo" placeholder="Logo Text"><br>
+        <input name="bg" placeholder="Background Color"><br>
+        <input name="font" placeholder="Font"><br>
+        <button>Save Settings</button>
     </form>
 
-    <h3>Update Status</h3>
-    <form action="/update_status" method="post">
-        <input name="id" placeholder="Trade ID"><br>
-        <select name="status">
-            <option>ACTIVE</option>
-            <option>EXPIRED</option>
-            <option>UPCOMING</option>
-        </select>
-        <button>Update</button>
-    </form>
-
-    <h3>Upload Media (Image / Video)</h3>
+    <h3>Upload Media</h3>
     <form action="/upload" method="post" enctype="multipart/form-data">
-        <input name="title" placeholder="Title"><br>
-        <input name="content" placeholder="Content"><br>
+        <input name="title"><br>
+        <input name="content"><br>
         <input type="file" name="file"><br>
         <button>Upload</button>
     </form>
 
-    <h3>Live Trades</h3>
-    {% for t in trades %}
-    <div style="background:#1e293b;margin:10px;padding:10px">
-        <b>{{t[1]}}</b> {{t[2]}}<br>
-        Entry: {{t[3]}} SL: {{t[4]}} TP: {{t[5]}}<br>
-        Status: {{t[6]}}
-    </div>
-    {% endfor %}
+    <h3>Create Trade</h3>
+    <form action="/trade" method="post">
+        <input name="symbol">
+        <input name="side">
+        <input name="entry">
+        <input name="sl">
+        <input name="tp">
+        <button>Create</button>
+    </form>
 
     </body>
-    """, trades=trades)
+    """)
 
-
-# ================= UPLOAD MEDIA =================
+# ================= UPLOAD =================
 @app.route("/upload", methods=["POST"])
 def upload():
     if not session.get("admin"):
         return redirect("/login")
 
     file = request.files["file"]
+    filename = secure_filename(file.filename)
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(path)
 
-    if file:
-        filename = secure_filename(file.filename)
-        path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file.save(path)
+    media_type = "image"
+    if filename.endswith(("mp4","mov")):
+        media_type = "video"
 
-        media_type = "image"
-        if filename.lower().endswith((".mp4", ".mov", ".avi")):
-            media_type = "video"
-
-        cur.execute("""
-        INSERT INTO posts (title, content, media_url, media_type, created_at)
-        VALUES (?, ?, ?, ?, ?)
-        """, (
-            request.form["title"],
-            request.form["content"],
-            path,
-            media_type,
-            datetime.now().isoformat()
-        ))
-
-        conn.commit()
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO posts (title,content,media,type,created_at)
+        VALUES (?,?,?,?,?)
+    """, (
+        request.form["title"],
+        request.form["content"],
+        path,
+        media_type,
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+    conn.close()
 
     return redirect("/admin")
-
 
 # ================= TRADE =================
 @app.route("/trade", methods=["POST"])
 def trade():
-    now = datetime.now()
-    expiry = now + timedelta(hours=4)
+    if not session.get("admin"):
+        return redirect("/login")
+
+    conn = db()
+    cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO trades (symbol, side, entry, sl, tp, status, created_at, expiry_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades VALUES (NULL,?,?,?,?,?,?,?,?)
     """, (
         request.form["symbol"],
         request.form["side"],
@@ -339,70 +312,53 @@ def trade():
         float(request.form["sl"]),
         float(request.form["tp"]),
         "ACTIVE",
-        now.isoformat(),
-        expiry.isoformat()
+        datetime.now().isoformat(),
+        (datetime.now()+timedelta(hours=4)).isoformat()
     ))
 
     conn.commit()
+    conn.close()
+
     return redirect("/admin")
-
-
-# ================= STATUS UPDATE =================
-@app.route("/update_status", methods=["POST"])
-def update_status():
-    cur.execute("UPDATE trades SET status=? WHERE id=?",
-                (request.form["status"], request.form["id"]))
-    conn.commit()
-    return redirect("/admin")
-
 
 # ================= ACCESS SYSTEM =================
-@app.route("/access", methods=["GET", "POST"])
+@app.route("/access", methods=["GET","POST"])
 def access():
     if request.method == "POST":
         code = request.form["code"]
 
+        conn = db()
+        cur = conn.cursor()
         cur.execute("SELECT * FROM access_codes WHERE code=?", (code,))
-        result = cur.fetchone()
+        row = cur.fetchone()
+        conn.close()
 
-        if result and datetime.now() < datetime.fromisoformat(result[2]):
+        if row:
             session["access"] = True
             return redirect("/signals")
 
         return "Invalid code"
 
-    return """
-    <form method="post">
-        <input name="code">
-        <button>Unlock</button>
-    </form>
-    """
+    return "<form method='post'><input name='code'><button>Unlock</button></form>"
 
-
-# ================= SIGNALS =================
+# ================= SIGNALS (LOCKED) =================
 @app.route("/signals")
 def signals():
     if not session.get("access"):
         return redirect("/access")
 
+    conn = db()
+    cur = conn.cursor()
     cur.execute("SELECT * FROM trades ORDER BY id DESC")
     rows = cur.fetchall()
+    conn.close()
 
-    html = "<h1>Premium Signals</h1>"
-
+    out = "<h1>Premium Signals</h1>"
     for r in rows:
-        html += f"""
-        <div style='background:#1e293b;margin:10px;padding:10px'>
-            {r[1]} {r[2]}<br>
-            Entry: {r[3]} SL: {r[4]} TP: {r[5]}<br>
-            Status: {r[6]}
-        </div>
-        """
+        out += f"<div style='background:#1e293b;margin:10px;padding:10px'>{r['symbol']} {r['side']}</div>"
 
-    return html
-
+    return out
 
 # ================= START =================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
