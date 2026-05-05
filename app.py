@@ -66,7 +66,26 @@ def execute_trade(symbol, side, entry, sl, tp):
     }
 
 
-# ---------------- SINGLE DASHBOARD ----------------
+# ---------------- REAL-TIME API (NEW) ----------------
+@app.route("/api/live")
+def live_data():
+    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
+    trades = cur.fetchall()
+
+    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 10")
+    posts = cur.fetchall()
+
+    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 10")
+    notes = cur.fetchall()
+
+    return jsonify({
+        "trades": trades,
+        "posts": posts,
+        "notifications": notes
+    })
+
+
+# ---------------- DASHBOARD ----------------
 @app.route("/")
 def dashboard():
     cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 5")
@@ -83,66 +102,14 @@ def dashboard():
     <head>
         <title>PESAMATRIX DASHBOARD</title>
         <style>
-            body {
-                margin:0;
-                font-family: Arial;
-                background:#0f172a;
-                color:white;
-            }
-
-            .sidebar {
-                width:220px;
-                height:100vh;
-                background:#111827;
-                position:fixed;
-                padding:20px;
-            }
-
-            .sidebar a {
-                display:block;
-                color:#38bdf8;
-                margin:12px 0;
-                text-decoration:none;
-            }
-
-            .main {
-                margin-left:240px;
-                padding:20px;
-            }
-
-            .card {
-                background:#1e293b;
-                padding:15px;
-                border-radius:10px;
-                margin-bottom:15px;
-            }
-
-            input, button {
-                width:100%;
-                padding:10px;
-                margin-top:8px;
-                border-radius:6px;
-                border:none;
-            }
-
-            button {
-                background:#22c55e;
-                color:white;
-                cursor:pointer;
-            }
-
-            .grid {
-                display:grid;
-                grid-template-columns:1fr 1fr;
-                gap:15px;
-            }
-
-            .box {
-                background:#1e293b;
-                padding:10px;
-                border-radius:8px;
-                margin-top:10px;
-            }
+            body { margin:0; font-family: Arial; background:#0f172a; color:white; }
+            .sidebar { width:220px; height:100vh; background:#111827; position:fixed; padding:20px; }
+            .sidebar a { display:block; color:#38bdf8; margin:12px 0; text-decoration:none; }
+            .main { margin-left:240px; padding:20px; }
+            .card { background:#1e293b; padding:15px; border-radius:10px; margin-bottom:15px; }
+            input, button { width:100%; padding:10px; margin-top:8px; border-radius:6px; border:none; }
+            button { background:#22c55e; color:white; cursor:pointer; }
+            .box { background:#1e293b; padding:10px; border-radius:8px; margin-top:10px; }
         </style>
     </head>
 
@@ -160,7 +127,7 @@ def dashboard():
 
     <div class="main">
 
-        <h1>📊 Admin Dashboard</h1>
+        <h1>📊 Admin Dashboard (LIVE)</h1>
 
         <!-- TRADE -->
         <div class="card" id="trade">
@@ -177,7 +144,7 @@ def dashboard():
 
         <!-- POSTS -->
         <div class="card" id="posts">
-            <h3>Create Post (News / Image / Video)</h3>
+            <h3>Create Post</h3>
             <form action="/post" method="post">
                 <input name="title" placeholder="Title" required>
                 <input name="content" placeholder="Content" required>
@@ -186,36 +153,73 @@ def dashboard():
             </form>
 
             <h4>Recent Posts</h4>
-            {% for p in posts %}
-                <div class="box">
-                    <b>{{p[1]}}</b>
-                    <p>{{p[2]}}</p>
-                </div>
-            {% endfor %}
+            <div id="postsBox">
+                {% for p in posts %}
+                    <div class="box">
+                        <b>{{p[1]}}</b>
+                        <p>{{p[2]}}</p>
+                    </div>
+                {% endfor %}
+            </div>
         </div>
 
-        <!-- SIGNALS -->
+        <!-- TRADE -->
         <div class="card">
             <h3>Recent Trades</h3>
-            {% for t in trades %}
-                <div class="box">
-                    {{t[1]}} - {{t[2]}} @ {{t[3]}}
-                </div>
-            {% endfor %}
+            <div id="tradesBox">
+                {% for t in trades %}
+                    <div class="box">
+                        {{t[1]}} - {{t[2]}} @ {{t[3]}}
+                    </div>
+                {% endfor %}
+            </div>
         </div>
 
         <!-- NOTIFICATIONS -->
         <div class="card" id="notifications">
             <h3>Notifications</h3>
-            {% for n in notes %}
-                <div class="box">
-                    {{n[1]}} <br>
-                    <small>{{n[2]}}</small>
-                </div>
-            {% endfor %}
+            <div id="notesBox">
+                {% for n in notes %}
+                    <div class="box">
+                        {{n[1]}} <br>
+                        <small>{{n[2]}}</small>
+                    </div>
+                {% endfor %}
+            </div>
         </div>
 
     </div>
+
+    <!-- 🔥 REAL-TIME SCRIPT -->
+    <script>
+        async function refreshData(){
+            const res = await fetch("/api/live");
+            const data = await res.json();
+
+            // Trades
+            let t = "";
+            data.trades.forEach(x=>{
+                t += `<div class="box">${x[1]} - ${x[2]} @ ${x[3]}</div>`;
+            });
+            document.getElementById("tradesBox").innerHTML = t;
+
+            // Posts
+            let p = "";
+            data.posts.forEach(x=>{
+                p += `<div class="box"><b>${x[1]}</b><p>${x[2]}</p></div>`;
+            });
+            document.getElementById("postsBox").innerHTML = p;
+
+            // Notifications
+            let n = "";
+            data.notifications.forEach(x=>{
+                n += `<div class="box">${x[1]} <br><small>${x[2]}</small></div>`;
+            });
+            document.getElementById("notesBox").innerHTML = n;
+        }
+
+        setInterval(refreshData, 3000);
+    </script>
 
     </body>
     </html>
@@ -251,13 +255,15 @@ def trade():
 # ---------------- POSTS ----------------
 @app.route("/post", methods=["POST"])
 def post():
-    title = request.form["title"]
-    content = request.form["content"]
-    media = request.form.get("media_url", "")
-
-    cur.execute("INSERT INTO posts (title, content, media_url, created_at) VALUES (?, ?, ?, ?)",
-                (title, content, media, datetime.now().isoformat()))
-
+    cur.execute(
+        "INSERT INTO posts (title, content, media_url, created_at) VALUES (?, ?, ?, ?)",
+        (
+            request.form["title"],
+            request.form["content"],
+            request.form.get("media_url", ""),
+            datetime.now().isoformat()
+        )
+    )
     conn.commit()
     return redirect("/")
 
@@ -280,7 +286,7 @@ def access():
     return "<h2>Enter Access Code</h2><form method='post'><input name='code'><button>Enter</button></form>"
 
 
-# ---------------- GENERATE CODE ----------------
+# ---------------- GENERATE ----------------
 @app.route("/generate")
 def generate():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
