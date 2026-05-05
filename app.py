@@ -5,29 +5,18 @@ from datetime import datetime, timedelta
 from flask import Flask, request, redirect, session
 
 app = Flask(__name__)
-app.secret_key = "CHANGE_THIS_TO_SECURE_SECRET"
-
-UPLOAD_FOLDER = "static/uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs("static", exist_ok=True)
+app.secret_key = "CHANGE_ME"
 
 # ================= BRANDING =================
 BRAND = "PESAMATRIX"
-TAGLINE = "Smart Forex Trading Platform"
-
 BG = "#0b1220"
 CARD = "#111a2e"
 BLUE = "#38bdf8"
 WHITE = "white"
 
-STYLE = f"""
-margin:0;
-font-family:Arial;
-background:{BG};
-color:{WHITE};
-"""
+STYLE = f"font-family:Arial;background:{BG};color:{WHITE};margin:0"
 
-# ================= DATABASE =================
+# ================= DB =================
 def db():
     conn = sqlite3.connect("app.db")
     conn.row_factory = sqlite3.Row
@@ -55,80 +44,63 @@ def init():
         status TEXT
     )""")
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS posts(
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        content TEXT,
-        media TEXT,
-        type TEXT
-    )""")
-
     conn.commit()
     conn.close()
 
 init()
 
-# ================= UI SYSTEM =================
+# ================= UI =================
 def header(title):
     return f"""
-    <div style="background:{CARD};padding:25px;text-align:center">
-        <h1 style="color:{BLUE};margin:0">{BRAND}</h1>
-        <p style="color:#cbd5e1;margin:5px">{TAGLINE}</p>
-        <h2 style="color:white">{title}</h2>
+    <div style="background:{CARD};padding:20px;text-align:center">
+        <h1 style="color:{BLUE}">{BRAND}</h1>
+        <h2>{title}</h2>
     </div>
     """
 
-def card(content):
-    return f"""
-    <div style="background:{CARD};padding:15px;margin:10px;border-radius:12px">
-        {content}
-    </div>
-    """
+def box(content):
+    return f"<div style='background:{CARD};padding:15px;margin:10px;border-radius:10px'>{content}</div>"
 
-def btn(text, link):
-    return f"<a href='{link}' style='color:{BLUE};text-decoration:none'>{text}</a>"
+# =========================================================
+# 🟦 LANDING SYSTEM (PUBLIC)
+# =========================================================
 
-# ================= LANDING PAGE (SAAS BUSY UI) =================
 @app.route("/")
 def home():
     return f"""
     <body style="{STYLE}">
+    {header("SMART FOREX TRADING PLATFORM")}
 
-    {header("🚀 TRADE SMART. GROW FAST.")}
+    {box("📊 <a href='/videos' style='color:{BLUE}'>Free Videos</a>")}
+    {box("📰 <a href='/posts' style='color:{BLUE}'>Latest Posts</a>")}
+    {box("📡 <a href='/news' style='color:{BLUE}'>Trading News</a>")}
+    {box("🔐 <a href='/premium' style='color:{BLUE}'>Premium Signals (LOCKED)</a>")}
+    {box("🟢 <a href='/register' style='color:{BLUE}'>Register</a>")}
+    {box("👤 <a href='/login' style='color:{BLUE}'>Login</a>")}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:20px">
+    {box("ABOUT US: Professional forex signals and market analysis system.")}
 
-        {card("📊 Free Videos<br>{btn('Open','/videos')}")}
-        {card("📰 Latest Posts<br>{btn('Open','/posts')}")}
-        {card("📡 Trading News<br>{btn('Open','/news')}")}
-        {card("🔐 Premium Signals (LOCKED)<br>{btn('Access','/premium')}")}
-        {card("🟢 Register<br>{btn('Join','/register')}")}
-        {card("👤 Login<br>{btn('Enter','/login')}")}
-
-    </div>
-
-    {card("""
-        <h3 style='color:#38bdf8'>ABOUT US</h3>
-        We provide professional forex signals, risk management systems and trading insights.
-    """)}
-
-    {card("""
-        <h3 style='color:#38bdf8'>CONTACT</h3>
-        📞 +254781585319<br>
-        📞 +254717434943<br>
-        🔗 TikTok: <a style='color:#38bdf8' href='https://tiktok.com/@smartgoldsignals'>@smartgoldsignals</a>
-    """)}
-
-    {card("""
-        <h3 style='color:#38bdf8'>PAYMENT</h3>
-        Mpesa Paybill: <b>322372</b><br>
-        Account = Your Registration Code
-    """)}
+    {box("CONTACT: +254781585319 | TikTok @smartgoldsignals")}
 
     </body>
     """
 
-# ================= REGISTER =================
+@app.route("/videos")
+def videos():
+    return f"<body style='{STYLE}'>{header('VIDEOS')}Coming Soon</body>"
+
+@app.route("/posts")
+def posts():
+    return f"<body style='{STYLE}'>{header('POSTS')}Coming Soon</body>"
+
+@app.route("/news")
+def news():
+    return f"<body style='{STYLE}'>{header('NEWS')}Coming Soon</body>"
+
+# =========================================================
+# 🟩 USER SYSTEM (AUTH + DASHBOARD)
+# =========================================================
+
 @app.route("/register", methods=["GET","POST"])
 def register():
     if request.method == "POST":
@@ -146,28 +118,19 @@ def register():
         conn.commit()
         conn.close()
 
-        return f"""
-        <body style="{STYLE}">
-        {header("ACCOUNT CREATED")}
-        <h1 style="color:{BLUE}">{code}</h1>
-        <a href='/login' style='color:{BLUE}'>Login</a>
-        </body>
-        """
+        return f"<body style='{STYLE}'>{header('ACCOUNT CREATED')}CODE: {code}</body>"
 
     return f"""
     <body style="{STYLE}">
     {header("REGISTER")}
-
     <form method="POST">
-        Name:<br><input name="name"><br><br>
-        Phone:<br><input name="phone"><br><br>
+        Name:<input name="name"><br><br>
+        Phone:<input name="phone"><br><br>
         <button>Register</button>
     </form>
-
     </body>
     """
 
-# ================= LOGIN =================
 @app.route("/login", methods=["GET","POST"])
 def login():
     if request.method == "POST":
@@ -184,16 +147,13 @@ def login():
     return f"""
     <body style="{STYLE}">
     {header("LOGIN")}
-
     <form method="POST">
-        Code:<br><input name="code"><br><br>
+        Code:<input name="code"><br><br>
         <button>Login</button>
     </form>
-
     </body>
     """
 
-# ================= DASHBOARD =================
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
@@ -206,28 +166,14 @@ def dashboard():
     <body style="{STYLE}">
     {header("USER DASHBOARD")}
 
-    {card(f"Name: {u['name']}<br>Code: {u['code']}<br>Status: {status}")}
+    {box(f"Name: {u['name']}<br>Code: {u['code']}<br>Status: {status}")}
 
-    {card(btn("📊 View Signals","/signals"))}
-    {card(btn("🔐 Premium Access","/premium"))}
+    {box("<a href='/signals' style='color:#38bdf8'>Signals</a>")}
+    {box("<a href='/premium' style='color:#38bdf8'>Premium (LOCKED)</a>")}
 
     </body>
     """
 
-# ================= PREMIUM LOCK =================
-@app.route("/premium")
-def premium():
-    if "user" not in session:
-        return redirect("/login")
-
-    u = session["user"]
-
-    if datetime.now() > datetime.fromisoformat(u["trial_end"]):
-        return f"<body style='{STYLE}'>{header('LOCKED - PAYMENT REQUIRED')}</body>"
-
-    return redirect("/signals")
-
-# ================= SIGNALS =================
 @app.route("/signals")
 def signals():
     conn = db()
@@ -238,17 +184,26 @@ def signals():
     out = f"<body style='{STYLE}'>{header('LIVE SIGNALS')}"
 
     for r in rows:
-        out += card(f"""
-        <b style='color:{BLUE}'>{r['symbol']}</b><br>
-        Entry: {r['entry']}<br>
-        TP: {r['tp']}<br>
-        SL: {r['sl']}<br>
-        Status: {r['status']}
-        """)
+        out += box(f"{r['symbol']} | Entry {r['entry']} | TP {r['tp']} | SL {r['sl']} | {r['status']}")
 
     return out + "</body>"
 
-# ================= ADMIN DASHBOARD =================
+@app.route("/premium")
+def premium():
+    if "user" not in session:
+        return redirect("/login")
+
+    u = session["user"]
+
+    if datetime.now() > datetime.fromisoformat(u["trial_end"]):
+        return f"<body style='{STYLE}'>{header('LOCKED - PAY TO ACCESS')}</body>"
+
+    return redirect("/signals")
+
+# =========================================================
+# 🟥 ADMIN SYSTEM (CONTROL CENTER)
+# =========================================================
+
 @app.route("/admin", methods=["GET","POST"])
 def admin():
     if request.method == "POST":
@@ -261,7 +216,7 @@ def admin():
         <body style="{STYLE}">
         {header("ADMIN LOGIN")}
         <form method="POST">
-            <input name="password">
+            Password:<input name="password"><br><br>
             <button>Login</button>
         </form>
         </body>
@@ -272,7 +227,6 @@ def admin():
 
     users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     trades = cur.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
-    posts = cur.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
 
     conn.close()
 
@@ -280,18 +234,20 @@ def admin():
     <body style="{STYLE}">
     {header("ADMIN DASHBOARD")}
 
-    {card(f"Users: {users} | Trades: {trades} | Posts: {posts}")}
+    {box(f"Users: {users} | Trades: {trades}")}
 
-    {card(btn("➕ Create Trade","/create_trade"))}
-    {card(btn("🧑 Users","/users"))}
-    {card(btn("📡 Manage Trades","/manage"))}
+    {box("<a href='/admin/trades' style='color:#38bdf8'>Manage Trades</a>")}
+    {box("<a href='/admin/users' style='color:#38bdf8'>Users</a>")}
+    {box("<a href='/admin/create_trade' style='color:#38bdf8'>Create Trade</a>")}
 
     </body>
     """
 
-# ================= CREATE TRADE =================
-@app.route("/create_trade", methods=["GET","POST"])
+@app.route("/admin/create_trade", methods=["GET","POST"])
 def create_trade():
+    if not session.get("admin"):
+        return redirect("/admin")
+
     if request.method == "POST":
         conn = db()
         cur = conn.cursor()
@@ -319,9 +275,11 @@ def create_trade():
     </body>
     """
 
-# ================= USERS =================
-@app.route("/users")
-def users():
+@app.route("/admin/users")
+def admin_users():
+    if not session.get("admin"):
+        return redirect("/admin")
+
     conn = db()
     cur = conn.cursor()
     rows = cur.execute("SELECT * FROM users").fetchall()
@@ -330,16 +288,22 @@ def users():
     out = f"<body style='{STYLE}'>{header('USERS')}"
 
     for u in rows:
-        out += card(f"{u['name']} | {u['code']}")
+        out += box(f"{u['name']} | {u['code']}")
 
     return out + "</body>"
 
-# ================= MPESA CALLBACK =================
+# =========================================================
+# MPESA CALLBACK
+# =========================================================
+
 @app.route("/mpesa_callback", methods=["POST"])
 def mpesa():
     print(request.json)
     return {"status": "ok"}
 
-# ================= RUN =================
+# =========================================================
+# RUN
+# =========================================================
+
 if __name__ == "__main__":
     app.run(debug=True)
