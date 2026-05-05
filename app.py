@@ -64,6 +64,12 @@ CREATE TABLE IF NOT EXISTS users (
 
 conn.commit()
 
+# ---------------- ROOT FIX ----------------
+@app.route("/")
+def root():
+    return redirect("/public")
+
+
 # ---------------- TRADE LOGIC ----------------
 def execute_trade(symbol, side, entry, sl, tp):
     return {
@@ -75,17 +81,20 @@ def execute_trade(symbol, side, entry, sl, tp):
         "status": "ACTIVE"
     }
 
-# ---------------- CLASSIFY STATUS ----------------
+
+# ---------------- STATUS ENGINE ----------------
 def trade_status(expiry):
     if not expiry:
         return "UNKNOWN"
-    if datetime.now() > datetime.fromisoformat(expiry):
-        return "EXPIRED"
-    return "ACTIVE"
+    try:
+        exp = datetime.fromisoformat(expiry)
+        return "ACTIVE" if datetime.now() < exp else "EXPIRED"
+    except:
+        return "UNKNOWN"
 
 
 # =====================================================
-# 🌍 PUBLIC LANDING PAGE
+# 🌍 PUBLIC PAGE
 # =====================================================
 @app.route("/public")
 def public():
@@ -115,15 +124,15 @@ def public():
         <h2>Contacts</h2>
         <p>📞 +254 700 000 000</p>
         <p>📧 support@pesamatrix.com</p>
-        <p>🌐 Instagram | Telegram | Twitter</p>
+        <p>🌐 Social Media Links</p>
     </div>
 
     <div class="section">
         <h2>Services</h2>
-        <p>🎥 Free Trading Videos</p>
+        <p>🎥 Free Videos</p>
         <p>📰 Trading News (Open)</p>
         <p>🔐 Premium Signals (Locked)</p>
-        <a href="/access">Unlock Premium</a>
+        <a href="/access">Unlock Signals</a>
     </div>
 
     <div class="section">
@@ -139,18 +148,22 @@ def public():
     </html>
     """)
 
+
 # =====================================================
-# 👤 USER REGISTRATION
+# USER REGISTRATION
 # =====================================================
 @app.route("/register", methods=["POST"])
 def register():
-    cur.execute("INSERT INTO users (name, contact, created_at) VALUES (?, ?, ?)",
-                (request.form["name"], request.form["contact"], datetime.now().isoformat()))
+    cur.execute(
+        "INSERT INTO users (name, contact, created_at) VALUES (?, ?, ?)",
+        (request.form["name"], request.form["contact"], datetime.now().isoformat())
+    )
     conn.commit()
     return redirect("/public")
 
+
 # =====================================================
-# 🔐 ACCESS PAGE (LOCKED SIGNALS)
+# ACCESS SYSTEM
 # =====================================================
 @app.route("/access", methods=["GET", "POST"])
 def access():
@@ -164,7 +177,7 @@ def access():
             session["access"] = True
             return redirect("/signals")
 
-        return "Invalid code ❌"
+        return "Invalid or expired code ❌"
 
     return """
     <h2>🔐 Premium Access</h2>
@@ -174,8 +187,9 @@ def access():
     </form>
     """
 
+
 # =====================================================
-# 📊 SIGNALS (LOCKED)
+# SIGNALS (LOCKED)
 # =====================================================
 @app.route("/signals")
 def signals():
@@ -188,7 +202,8 @@ def signals():
     html = "<h1>📊 PREMIUM SIGNALS</h1>"
 
     for r in rows:
-        status = trade_status(r[7])
+        status = trade_status(r[8])
+
         html += f"""
         <div style='background:#1e293b;color:white;margin:10px;padding:10px'>
             <b>{r[1]}</b> {r[2]}<br>
@@ -199,8 +214,9 @@ def signals():
 
     return html
 
+
 # =====================================================
-# 📢 ADMIN DASHBOARD
+# ADMIN PANEL
 # =====================================================
 @app.route("/admin")
 def admin():
@@ -219,8 +235,9 @@ def admin():
     <a href="/generate">Generate Code</a>
     """)
 
+
 # =====================================================
-# 📡 TRADE POST
+# TRADE POST
 # =====================================================
 @app.route("/trade", methods=["POST"])
 def trade():
@@ -245,8 +262,9 @@ def trade():
     conn.commit()
     return redirect("/admin")
 
+
 # =====================================================
-# 🧾 GENERATE ACCESS CODE
+# GENERATE CODE
 # =====================================================
 @app.route("/generate")
 def generate():
@@ -259,18 +277,6 @@ def generate():
 
     return f"CODE: {code}"
 
-# =====================================================
-# 🔥 LIVE API
-# =====================================================
-@app.route("/api/live")
-def api():
-    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
-    trades = cur.fetchall()
-
-    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 10")
-    posts = cur.fetchall()
-
-    return jsonify({"trades": trades, "posts": posts})
 
 # =====================================================
 # START
