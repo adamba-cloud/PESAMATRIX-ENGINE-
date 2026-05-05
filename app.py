@@ -46,7 +46,7 @@ def execute_trade(symbol, side, entry, sl, tp):
         "status": "executed"
     }
 
-# ---------------- HOME (ADMIN DASHBOARD) ----------------
+# ---------------- HOME (ADMIN PANEL) ----------------
 @app.route("/")
 def home():
     return render_template_string("""
@@ -115,7 +115,7 @@ def trade():
 
     return jsonify(result)
 
-# ---------------- ACCESS PAGE ----------------
+# ---------------- ACCESS PAGE (FIXED VERSION) ----------------
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -131,17 +131,79 @@ def access():
                 session["access"] = True
                 return redirect("/signals")
 
-        return "Invalid or expired code ❌"
+        return render_template_string("""
+        <html>
+        <head>
+            <style>
+                body {
+                    font-family: Arial;
+                    background: #0f172a;
+                    color: white;
+                    text-align: center;
+                }
+                .box {
+                    margin-top: 120px;
+                }
+                a { color:#38bdf8; }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h2>❌ Invalid or Expired Code</h2>
+                <a href="/access">Try Again</a>
+            </div>
+        </body>
+        </html>
+        """)
 
     return render_template_string("""
-    <h2>Enter Access Code</h2>
-    <form method="post">
-        <input name="code" placeholder="Enter code" required>
-        <button type="submit">Access</button>
-    </form>
+    <html>
+    <head>
+        <title>Subscriber Access</title>
+        <style>
+            body {
+                font-family: Arial;
+                background: #0f172a;
+                color: white;
+                text-align: center;
+            }
+            .box {
+                margin-top: 120px;
+            }
+            input {
+                padding: 12px;
+                width: 250px;
+                border-radius: 6px;
+                border: none;
+            }
+            button {
+                padding: 12px;
+                width: 250px;
+                margin-top: 10px;
+                background: #22c55e;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="box">
+            <h2>🔐 Subscriber Access</h2>
+            <p>Enter your daily access code</p>
+
+            <form method="post">
+                <input name="code" placeholder="ACCESS CODE" required><br>
+                <button type="submit">UNLOCK SIGNALS</button>
+            </form>
+        </div>
+    </body>
+    </html>
     """)
 
-# ---------------- SIGNALS (SUBSCRIBER DASHBOARD) ----------------
+# ---------------- SIGNALS (SUBSCRIBERS) ----------------
 @app.route("/signals")
 def signals():
     if not session.get("access"):
@@ -162,14 +224,12 @@ def signals():
                 padding:15px;
                 width:300px;
                 border-radius:10px;
-                box-shadow:0 0 10px #000;
             }
             .buy { color:#22c55e; font-weight:bold; }
             .sell { color:#ef4444; font-weight:bold; }
         </style>
     </head>
     <body>
-
         <h1>📊 LIVE SIGNALS</h1>
     """
 
@@ -190,7 +250,7 @@ def signals():
     html += "</body></html>"
     return render_template_string(html)
 
-# ---------------- GENERATE ACCESS CODE ----------------
+# ---------------- GENERATE CODE ----------------
 @app.route("/generate")
 def generate_code():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
