@@ -19,7 +19,7 @@ os.makedirs("static", exist_ok=True)
 BG = "#0b1220"
 CARD = "#111a2e"
 ACCENT = "#38bdf8"
-TEXT = "font-size:18px;"
+TEXT = "font-size:20px;"
 
 # DATABASE
 def db():
@@ -43,13 +43,10 @@ def init_db():
     cur.execute("""CREATE TABLE IF NOT EXISTS trades (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT,
-        side TEXT,
         entry REAL,
         sl REAL,
         tp REAL,
-        status TEXT,
-        created_at TEXT,
-        expiry_at TEXT
+        status TEXT
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS posts (
@@ -57,14 +54,7 @@ def init_db():
         title TEXT,
         content TEXT,
         media TEXT,
-        type TEXT,
-        created_at TEXT
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS codes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        code TEXT,
-        expiry TEXT
+        type TEXT
     )""")
 
     conn.commit()
@@ -72,89 +62,139 @@ def init_db():
 
 init_db()
 
-# ================= HOME =================
+# COMMON FOOTER
+def footer(user=None):
+    acc = user["account_code"] if user else "Your Code"
+    return f"""
+    <div style="background:{CARD};padding:15px;margin:15px;border-radius:12px">
+        <h3 style="color:{ACCENT}">📞 Contacts</h3>
+        <a href="tel:+254781585319" style="color:{ACCENT}">+254781585319</a><br>
+        <a href="tel:+254717434943" style="color:{ACCENT}">+254717434943</a><br>
+        <a href="https://tiktok.com/@smartgoldsignals" style="color:{ACCENT}">TikTok</a>
+    </div>
+
+    <div style="background:{CARD};padding:15px;margin:15px;border-radius:12px">
+        <h3 style="color:{ACCENT}">💳 Payments</h3>
+        Lipa Na Mpesa<br>
+        Paybill: <b>322372</b><br>
+        Account: <b>{acc}</b>
+    </div>
+    """
+
+# HOME
 @app.route("/")
 def home():
     logo = f'<img src="/{LOGO_PATH}" width="120">' if os.path.exists(LOGO_PATH) else "<h2>PESAMATRIX</h2>"
 
     return f"""
     <body style="background:{BG};color:white;font-family:Arial;{TEXT}">
-    <div style="text-align:center">{logo}</div>
 
-    <h2 style="color:{ACCENT};text-align:center">Trading Platform</h2>
+    <div style="text-align:center">{logo}</div>
+    <h2 style="color:{ACCENT};text-align:center">Smart Trading Platform</h2>
 
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:15px">
 
     <div style="background:{CARD};padding:15px"><a href="/videos" style="color:{ACCENT}">🎥 Free Videos</a></div>
     <div style="background:{CARD};padding:15px"><a href="/news" style="color:{ACCENT}">📰 Trading News</a></div>
-    <div style="background:{CARD};padding:15px"><a href="/access" style="color:{ACCENT}">🔐 Premium Signals</a></div>
     <div style="background:{CARD};padding:15px"><a href="/posts" style="color:{ACCENT}">📊 Latest Posts</a></div>
+    <div style="background:{CARD};padding:15px"><a href="/access" style="color:{ACCENT}">🔐 Premium Signals</a></div>
     <div style="background:{CARD};padding:15px"><a href="/register" style="color:{ACCENT}">🟢 Join</a></div>
     <div style="background:{CARD};padding:15px"><a href="/dashboard" style="color:{ACCENT}">👤 Dashboard</a></div>
 
     </div>
 
-    <div style="padding:10px">
-    <h3 style="color:{ACCENT}">About Us</h3>
-    We provide high accuracy forex trading signals in real-time with strong risk management.
+    <div style="padding:15px">
+        <h3 style="color:{ACCENT}">About Us</h3>
+        We provide high accuracy forex signals, real-time updates, and professional risk management.
     </div>
 
-    <a href="/login" style="color:{ACCENT}">Admin</a>
+    {footer()}
+
+    <div style="text-align:center">
+        <a href="/login" style="color:{ACCENT}">Admin</a>
+    </div>
+
     </body>
     """
 
-# ================= VIDEOS =================
-@app.route("/videos")
-def videos():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM posts WHERE type='video'")
-    rows = cur.fetchall()
-    conn.close()
+# REGISTER
+@app.route("/register", methods=["GET","POST"])
+def register():
+    if request.method == "POST":
+        code = str(uuid.uuid4())[:8].upper()
+        trial_end = datetime.now() + timedelta(days=4)
 
-    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>🎥 Free Videos</h2>"
+        conn = db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users VALUES (NULL,?,?,?,?,?)",
+                    (request.form["name"], request.form["phone"], code,
+                     trial_end.isoformat(), datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
 
-    for r in rows:
-        if r["media"].startswith("http"):
-            out += f"<iframe width='100%' height='200' src='{r['media']}'></iframe>"
-        else:
-            out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
+        return f"<body style='background:{BG};color:white;{TEXT}'>Account Code: <b>{code}</b><br><a href='/user_login'>Login</a></body>"
 
-    return out + "</body>"
+    return f"""
+    <body style="background:{BG};color:white;{TEXT}">
+    Name:<br><input name='name'><br><br>
+    Phone:<br><input name='phone'><br><br>
+    <button>Join</button>
+    </body>
+    """
 
-# ================= NEWS =================
-@app.route("/news")
-def news():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM posts WHERE type='news'")
-    rows = cur.fetchall()
-    conn.close()
+# LOGIN
+@app.route("/user_login", methods=["GET","POST"])
+def user_login():
+    if request.method == "POST":
+        conn = db()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE account_code=?", (request.form["code"],))
+        user = cur.fetchone()
+        conn.close()
 
-    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>📰 Trading News</h2>"
+        if user:
+            session["user"] = dict(user)
+            return redirect("/dashboard")
 
-    for r in rows:
-        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}<br>{r['content']}</div>"
+    return f"<body style='background:{BG};color:white;{TEXT}'>Account Code:<br><input name='code'><button>Login</button></body>"
 
-    return out + "</body>"
+# DASHBOARD
+@app.route("/dashboard")
+def dashboard():
+    if not session.get("user"):
+        return redirect("/user_login")
 
-# ================= POSTS =================
-@app.route("/posts")
-def posts():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM posts WHERE type='post'")
-    rows = cur.fetchall()
-    conn.close()
+    user = session["user"]
+    status = "ACTIVE" if datetime.now() < datetime.fromisoformat(user["trial_end"]) else "EXPIRED"
 
-    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>📊 Latest Posts</h2>"
+    return f"""
+    <body style="background:{BG};color:white;{TEXT}">
+    <h2 style="color:{ACCENT}">User Dashboard</h2>
 
-    for r in rows:
-        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+    Name: {user['name']}<br>
+    Account: {user['account_code']}<br>
+    Status: {status}<br><br>
 
-    return out + "</body>"
+    <a href="/access" style="color:{ACCENT}">View Signals</a>
 
-# ================= SIGNALS =================
+    {footer(user)}
+    </body>
+    """
+
+# PREMIUM ACCESS
+@app.route("/access")
+def access():
+    if not session.get("user"):
+        return redirect("/user_login")
+
+    user = session["user"]
+
+    if datetime.now() > datetime.fromisoformat(user["trial_end"]):
+        return f"<body style='background:{BG};color:white'>🔒 Access Locked - Please Pay</body>"
+
+    return redirect("/signals")
+
+# SIGNALS
 @app.route("/signals")
 def signals():
     conn = db()
@@ -167,8 +207,8 @@ def signals():
 
     for r in rows:
         out += f"""
-        <div style='background:{CARD};margin:10px;padding:15px;border-radius:10px'>
-        <b style='color:{ACCENT}'>{r['symbol']}</b><br><br>
+        <div style='background:{CARD};padding:15px;margin:10px;border-radius:10px'>
+        <h3 style='color:{ACCENT}'>{r['symbol']}</h3>
         Entry: {r['entry']}<br>
         TP: {r['tp']}<br>
         SL: {r['sl']}<br>
@@ -178,7 +218,65 @@ def signals():
 
     return out + "</body>"
 
-# ================= ADMIN =================
+# VIDEOS
+@app.route("/videos")
+def videos():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='video'")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Videos</h2>"
+
+    for r in rows:
+        out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
+
+    return out + footer() + "</body>"
+
+# NEWS
+@app.route("/news")
+def news():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Trading News</h2>"
+
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+
+    return out + footer() + "</body>"
+
+# POSTS
+@app.route("/posts")
+def posts():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Latest Posts</h2>"
+
+    for r in rows:
+        out += f"<div style='background:{CARD};padding:10px;margin:10px'>{r['title']}</div>"
+
+    return out + footer() + "</body>"
+
+# ADMIN LOGIN
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        if request.form["password"] == ADMIN_PASSWORD:
+            session["admin"] = True
+            return redirect("/admin")
+
+    return f"<body style='background:{BG};color:white'><input name='password'><button>Login</button></body>"
+
+# ADMIN DASHBOARD
 @app.route("/admin")
 def admin():
     if not session.get("admin"):
@@ -191,38 +289,10 @@ def admin():
     <a href="/create_trade">Create Signal</a><br>
     <a href="/manage_trades">Manage Trades</a><br>
     <a href="/upload">Upload Media</a><br>
-    <a href="/generate_code">Generate Code</a><br>
     <a href="/users">Users</a><br>
-    <a href="/create_news">Create News</a><br>
-
     </body>
     """
 
-# ================= MANAGE TRADES =================
-@app.route("/manage_trades")
-def manage_trades():
-    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Manage Trades Working</h2></body>"
-
-# ================= UPLOAD =================
-@app.route("/upload", methods=["GET","POST"])
-def upload():
-    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Upload Media Working</h2></body>"
-
-# ================= GENERATE CODE =================
-@app.route("/generate_code")
-def generate_code():
-    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Code Generated</h2></body>"
-
-# ================= USERS =================
-@app.route("/users")
-def users():
-    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Users List</h2></body>"
-
-# ================= CREATE NEWS =================
-@app.route("/create_news")
-def create_news():
-    return f"<body style='background:{BG};color:white;{TEXT}'><h2 style='color:{ACCENT}'>Create News Page</h2></body>"
-
-# ================= START =================
+# START
 if __name__ == "__main__":
     app.run()
