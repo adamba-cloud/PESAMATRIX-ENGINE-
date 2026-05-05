@@ -305,30 +305,71 @@ def admin_trades():
 
 # ================= ADMIN MEDIA =================
 @app.route("/admin/media", methods=["GET","POST"])
+from werkzeug.utils import secure_filename
+
+@app.route("/admin/media", methods=["GET","POST"])
 def admin_media():
-    if not session.get("admin"): return redirect("/admin")
+    if not session.get("admin"):
+        return redirect("/admin")
 
-    conn=db();cur=conn.cursor()
+    conn = db()
+    cur = conn.cursor()
 
-    if request.method=="POST":
+    message = ""
+
+    if request.method == "POST":
+
+        # ===== FILE UPLOAD =====
         if "file" in request.files:
-            f=request.files["file"]
-            if f.filename:
-                path=os.path.join(UPLOAD_FOLDER,f.filename)
+            f = request.files["file"]
+
+            if f and f.filename != "":
+                filename = secure_filename(f.filename)
+
+                # avoid overwrite
+                unique_name = str(uuid.uuid4()) + "_" + filename
+                path = os.path.join(UPLOAD_FOLDER, unique_name)
+
                 f.save(path)
-                cur.execute("INSERT INTO media VALUES(NULL,?,NULL)",(f.filename,))
+
+                cur.execute(
+                    "INSERT INTO media VALUES(NULL,?,NULL)",
+                    (unique_name,)
+                )
+
+                message = "✅ File uploaded successfully"
+
+        # ===== LINK UPLOAD =====
         if request.form.get("link"):
-            cur.execute("INSERT INTO media VALUES(NULL,NULL,?)",(request.form["link"],))
+            link = request.form.get("link").strip()
+
+            if link != "":
+                cur.execute(
+                    "INSERT INTO media VALUES(NULL,NULL,?)",
+                    (link,)
+                )
+
+                message = "✅ Link added successfully"
 
         conn.commit()
 
-    return layout(header("UPLOAD MEDIA")+"""
-    <form method='POST' enctype='multipart/form-data'>
-    File:<input type='file' name='file'><br>
-    OR Video Link:<input name='link'><br>
-    <button>Upload</button>
-    </form>
-    """)
+    conn.close()
+
+    return layout(
+        header("UPLOAD MEDIA") +
+        card(message) +
+        """
+        <form method='POST' enctype='multipart/form-data'>
+            <h3 style='color:#38bdf8'>Upload From Gallery</h3>
+            <input type='file' name='file'><br><br>
+
+            <h3 style='color:#38bdf8'>OR Add Video Link</h3>
+            <input name='link' placeholder='https://...'><br><br>
+
+            <button>Upload</button>
+        </form>
+        """
+    )
 
 # ================= ADMIN PAYMENTS =================
 @app.route("/admin/payments", methods=["GET","POST"])
