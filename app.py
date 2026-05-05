@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS users (
 )
 """)
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    content TEXT,
+    media_url TEXT,
+    created_at TEXT
+)
+""")
+
 conn.commit()
 
 
@@ -58,16 +68,24 @@ def execute_trade(symbol, side, entry, sl, tp):
         "entry": float(entry),
         "sl": float(sl),
         "tp": float(tp),
-        "status": "ACTIVE"
+        "status": "UPCOMING"
     }
 
 
-def trade_status(expiry):
-    if not expiry:
-        return "UNKNOWN"
+def trade_status(expiry, manual_status=None):
+    if manual_status:
+        return manual_status
+
     try:
         exp = datetime.fromisoformat(expiry)
-        return "ACTIVE" if datetime.now() < exp else "EXPIRED"
+        now = datetime.now()
+
+        if now > exp:
+            return "EXPIRED"
+        elif now < exp - timedelta(hours=4):
+            return "UPCOMING"
+        else:
+            return "ACTIVE"
     except:
         return "UNKNOWN"
 
@@ -78,9 +96,7 @@ def root():
     return redirect("/public")
 
 
-# =====================================================
-# 🌍 PUBLIC LANDING PAGE
-# =====================================================
+# ================= PUBLIC PAGE =================
 @app.route("/public")
 def public():
     return render_template_string("""
@@ -90,8 +106,6 @@ def public():
         <style>
             body { font-family: Arial; background:#0f172a; color:white; margin:0; }
             .section { padding:40px; border-bottom:1px solid #1e293b; }
-            input, button { padding:10px; margin-top:10px; width:250px; }
-            button { background:#22c55e; color:white; border:none; }
             a { color:#38bdf8; }
         </style>
     </head>
@@ -104,19 +118,19 @@ def public():
 
     <div class="section">
         <h2>About</h2>
-        <p>We provide real-time forex & crypto trading signals.</p>
+        <p>We provide forex & crypto trading signals in real time.</p>
     </div>
 
     <div class="section">
         <h2>Contacts</h2>
         <p>📞 +254 700 000 000</p>
         <p>📧 support@pesamatrix.com</p>
-        <p>🌐 Telegram | Instagram | Twitter</p>
+        <p>📱 Telegram | Instagram | Twitter</p>
     </div>
 
     <div class="section">
         <h2>Services</h2>
-        <p>🎥 Free Videos (Open)</p>
+        <p>🎥 Videos (Open)</p>
         <p>📰 Trading News (Open)</p>
         <p>🔐 Premium Signals (Locked)</p>
         <a href="/access">Unlock Signals</a>
@@ -125,8 +139,8 @@ def public():
     <div class="section">
         <h2>Sign In</h2>
         <form action="/register" method="post">
-            <input name="name" placeholder="Name" required><br>
-            <input name="contact" placeholder="Phone or Email" required><br>
+            <input name="name" placeholder="Name"><br><br>
+            <input name="contact" placeholder="Phone or Email"><br><br>
             <button>Join</button>
         </form>
     </div>
@@ -140,9 +154,7 @@ def public():
     """)
 
 
-# =====================================================
-# USER REGISTRATION
-# =====================================================
+# ================= USER REGISTER =================
 @app.route("/register", methods=["POST"])
 def register():
     cur.execute(
@@ -153,9 +165,7 @@ def register():
     return redirect("/public")
 
 
-# =====================================================
-# ADMIN LOGIN
-# =====================================================
+# ================= ADMIN LOGIN =================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -179,59 +189,91 @@ def logout():
     return redirect("/login")
 
 
-# =====================================================
-# ADMIN DASHBOARD
-# =====================================================
+# ================= BEAUTIFUL ADMIN DASHBOARD =================
 @app.route("/admin")
 def admin():
     if not session.get("admin"):
         return redirect("/login")
 
+    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    trades = cur.fetchall()
+
     return render_template_string("""
-    <h1>ADMIN DASHBOARD</h1>
+    <html>
+    <head>
+        <title>Admin Dashboard</title>
+        <style>
+            body { margin:0; font-family:Arial; background:#0f172a; color:white; }
+            .sidebar { width:220px; height:100vh; background:#111827; position:fixed; padding:20px; }
+            .sidebar a { display:block; color:#38bdf8; margin:10px 0; text-decoration:none; }
+            .main { margin-left:240px; padding:20px; }
+            .card { background:#1e293b; padding:15px; margin-bottom:15px; border-radius:10px; }
+            input, select, button {
+                width:100%; padding:10px; margin-top:5px;
+                border-radius:6px; border:none;
+            }
+            button { background:#22c55e; color:white; }
+            .trade { background:#111827; padding:10px; margin-top:10px; border-radius:8px; }
+        </style>
+    </head>
+    <body>
 
-    <form action="/trade" method="post">
-        <input name="symbol" placeholder="Symbol"><br>
-        <input name="side" placeholder="BUY / SELL"><br>
-        <input name="entry" placeholder="Entry"><br>
-        <input name="sl" placeholder="SL"><br>
-        <input name="tp" placeholder="TP"><br>
-        <button>Send Signal</button>
-    </form>
+    <div class="sidebar">
+        <h2>ADMIN</h2>
+        <a href="/admin">Dashboard</a>
+        <a href="/logout">Logout</a>
+        <a href="/generate">Generate Code</a>
+    </div>
 
-    <br>
-    <a href="/generate">Generate Access Code</a><br>
-    <a href="/logout">Logout</a>
-    """)
+    <div class="main">
+
+        <div class="card">
+            <h3>Create Trade</h3>
+            <form action="/trade" method="post">
+                <input name="symbol" placeholder="Symbol">
+                <input name="side" placeholder="BUY / SELL">
+                <input name="entry" placeholder="Entry">
+                <input name="sl" placeholder="SL">
+                <input name="tp" placeholder="TP">
+                <button>Create Trade</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3>Live Trades</h3>
+            {% for t in trades %}
+            <div class="trade">
+                <b>{{t[1]}}</b> {{t[2]}}<br>
+                Entry: {{t[3]}} SL: {{t[4]}} TP: {{t[5]}}<br>
+                Status: {{t[6]}}
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+
+    </body>
+    </html>
+    """, trades=trades)
 
 
-# =====================================================
-# TRADE CREATION
-# =====================================================
+# ================= TRADE CREATE =================
 @app.route("/trade", methods=["POST"])
 def trade():
     data = request.form
     now = datetime.now()
     expiry = now + timedelta(hours=4)
 
-    result = execute_trade(
-        data["symbol"],
-        data["side"],
-        data["entry"],
-        data["sl"],
-        data["tp"]
-    )
-
     cur.execute("""
         INSERT INTO trades 
         (symbol, side, entry, sl, tp, status, created_at, expiry_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        result["symbol"],
-        result["side"],
-        result["entry"],
-        result["sl"],
-        result["tp"],
+        data["symbol"],
+        data["side"],
+        float(data["entry"]),
+        float(data["sl"]),
+        float(data["tp"]),
         "ACTIVE",
         now.isoformat(),
         expiry.isoformat()
@@ -241,9 +283,7 @@ def trade():
     return redirect("/admin")
 
 
-# =====================================================
-# ACCESS SYSTEM (LOCKED SIGNALS)
-# =====================================================
+# ================= ACCESS SYSTEM =================
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -259,7 +299,7 @@ def access():
         return "Invalid code ❌"
 
     return """
-    <h2>🔐 Enter Access Code</h2>
+    <h2>Access Signals</h2>
     <form method="post">
         <input name="code">
         <button>Unlock</button>
@@ -267,9 +307,7 @@ def access():
     """
 
 
-# =====================================================
-# SIGNALS (LOCKED USERS)
-# =====================================================
+# ================= SIGNALS =================
 @app.route("/signals")
 def signals():
     if not session.get("access"):
@@ -278,25 +316,21 @@ def signals():
     cur.execute("SELECT * FROM trades ORDER BY id DESC")
     rows = cur.fetchall()
 
-    html = "<h1>📊 PREMIUM SIGNALS</h1>"
+    html = "<h1>Premium Signals</h1>"
 
     for r in rows:
-        status = trade_status(r[7])
-
         html += f"""
-        <div style="background:#1e293b;color:white;margin:10px;padding:10px">
-            <b>{r[1]}</b> {r[2]}<br>
-            Entry: {r[3]} | SL: {r[4]} | TP: {r[5]}<br>
-            Status: {status}
+        <div style='background:#1e293b;color:white;margin:10px;padding:10px'>
+            {r[1]} {r[2]}<br>
+            Entry: {r[3]} SL: {r[4]} TP: {r[5]}<br>
+            Status: {r[6]}
         </div>
         """
 
     return html
 
 
-# =====================================================
-# GENERATE ACCESS CODE
-# =====================================================
+# ================= CODE GENERATOR =================
 @app.route("/generate")
 def generate():
     if not session.get("admin"):
@@ -305,18 +339,14 @@ def generate():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
     expiry = datetime.now() + timedelta(days=1)
 
-    cur.execute(
-        "INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
-        (code, expiry.isoformat())
-    )
+    cur.execute("INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
+                (code, expiry.isoformat()))
     conn.commit()
 
-    return f"CODE: {code} (24h valid)"
+    return f"ACCESS CODE: {code}"
 
 
-# =====================================================
-# START APP
-# =====================================================
+# ================= START =================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
