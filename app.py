@@ -5,25 +5,29 @@ from datetime import datetime, timedelta
 from flask import Flask, request, redirect, session
 
 app = Flask(__name__)
-app.secret_key = "super_secret_key_change_me"
+app.secret_key = "CHANGE_THIS_TO_SECURE_SECRET"
 
 UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs("static", exist_ok=True)
 
-# ================= STYLE =================
+# ================= BRANDING =================
+BRAND = "PESAMATRIX"
+TAGLINE = "Smart Forex Trading Platform"
+
 BG = "#0b1220"
 CARD = "#111a2e"
 BLUE = "#38bdf8"
 WHITE = "white"
 
 STYLE = f"""
+margin:0;
 font-family:Arial;
-color:{WHITE};
 background:{BG};
+color:{WHITE};
 """
 
-# ================= DB =================
+# ================= DATABASE =================
 def db():
     conn = sqlite3.connect("app.db")
     conn.row_factory = sqlite3.Row
@@ -64,44 +68,49 @@ def init():
 
 init()
 
-# ================= UI HELPERS =================
-def header(text):
+# ================= UI SYSTEM =================
+def header(title):
     return f"""
-    <div style="background:{CARD};padding:20px;text-align:center">
-        <h1 style="color:{BLUE}">{text}</h1>
+    <div style="background:{CARD};padding:25px;text-align:center">
+        <h1 style="color:{BLUE};margin:0">{BRAND}</h1>
+        <p style="color:#cbd5e1;margin:5px">{TAGLINE}</p>
+        <h2 style="color:white">{title}</h2>
     </div>
     """
 
 def card(content):
     return f"""
-    <div style="background:{CARD};padding:15px;margin:10px;border-radius:10px">
+    <div style="background:{CARD};padding:15px;margin:10px;border-radius:12px">
         {content}
     </div>
     """
 
-def button(label, link):
-    return f"<a href='{link}' style='color:{BLUE}'>{label}</a>"
+def btn(text, link):
+    return f"<a href='{link}' style='color:{BLUE};text-decoration:none'>{text}</a>"
 
-# ================= LANDING PAGE (BUSY) =================
+# ================= LANDING PAGE (SAAS BUSY UI) =================
 @app.route("/")
 def home():
     return f"""
     <body style="{STYLE}">
 
-    {header("🚀 PESAMATRIX TRADING PLATFORM")}
+    {header("🚀 TRADE SMART. GROW FAST.")}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:15px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:20px">
 
-        {card("📊 Free Videos<br><a href='/videos' style='color:{BLUE}'>Open</a>")}
-        {card("📰 Latest Posts<br><a href='/posts' style='color:{BLUE}'>Open</a>")}
-        {card("📡 Trading News<br><a href='/news' style='color:{BLUE}'>Open</a>")}
-        {card("🔐 Premium Signals (LOCKED)<br><a href='/premium' style='color:{BLUE}'>Access</a>")}
-        {card("🟢 Register<br><a href='/register' style='color:{BLUE}'>Join</a>")}
-        {card("👤 Login<br><a href='/login' style='color:{BLUE}'>Enter</a>")}
+        {card("📊 Free Videos<br>{btn('Open','/videos')}")}
+        {card("📰 Latest Posts<br>{btn('Open','/posts')}")}
+        {card("📡 Trading News<br>{btn('Open','/news')}")}
+        {card("🔐 Premium Signals (LOCKED)<br>{btn('Access','/premium')}")}
+        {card("🟢 Register<br>{btn('Join','/register')}")}
+        {card("👤 Login<br>{btn('Enter','/login')}")}
 
     </div>
 
-    {card("<h3 style='color:"+BLUE+"'>ABOUT US</h3>We provide forex signals, risk management, and trading education.")}
+    {card("""
+        <h3 style='color:#38bdf8'>ABOUT US</h3>
+        We provide professional forex signals, risk management systems and trading insights.
+    """)}
 
     {card("""
         <h3 style='color:#38bdf8'>CONTACT</h3>
@@ -111,9 +120,9 @@ def home():
     """)}
 
     {card("""
-        <h3 style='color:#38bdf8'>PAYMENT METHODS</h3>
+        <h3 style='color:#38bdf8'>PAYMENT</h3>
         Mpesa Paybill: <b>322372</b><br>
-        Account = Your Code after registration
+        Account = Your Registration Code
     """)}
 
     </body>
@@ -139,8 +148,8 @@ def register():
 
         return f"""
         <body style="{STYLE}">
-        <h2 style="color:{BLUE}">Your Account Code</h2>
-        <h1>{code}</h1>
+        {header("ACCOUNT CREATED")}
+        <h1 style="color:{BLUE}">{code}</h1>
         <a href='/login' style='color:{BLUE}'>Login</a>
         </body>
         """
@@ -199,8 +208,8 @@ def dashboard():
 
     {card(f"Name: {u['name']}<br>Code: {u['code']}<br>Status: {status}")}
 
-    {card("<a href='/signals' style='color:#38bdf8'>View Signals</a>")}
-    {card("<a href='/premium' style='color:#38bdf8'>Premium (Locked System)</a>")}
+    {card(btn("📊 View Signals","/signals"))}
+    {card(btn("🔐 Premium Access","/premium"))}
 
     </body>
     """
@@ -214,7 +223,7 @@ def premium():
     u = session["user"]
 
     if datetime.now() > datetime.fromisoformat(u["trial_end"]):
-        return f"<body style='{STYLE}'><h2 style='color:{BLUE}'>🔒 Locked - Please Pay</h2></body>"
+        return f"<body style='{STYLE}'>{header('LOCKED - PAYMENT REQUIRED')}</body>"
 
     return redirect("/signals")
 
@@ -223,15 +232,14 @@ def premium():
 def signals():
     conn = db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM trades")
-    rows = cur.fetchall()
+    rows = cur.execute("SELECT * FROM trades").fetchall()
     conn.close()
 
     out = f"<body style='{STYLE}'>{header('LIVE SIGNALS')}"
 
     for r in rows:
         out += card(f"""
-        <b>{r['symbol']}</b><br>
+        <b style='color:{BLUE}'>{r['symbol']}</b><br>
         Entry: {r['entry']}<br>
         TP: {r['tp']}<br>
         SL: {r['sl']}<br>
@@ -240,44 +248,7 @@ def signals():
 
     return out + "</body>"
 
-# ================= POSTS =================
-@app.route("/posts")
-def posts():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM posts")
-    rows = cur.fetchall()
-    conn.close()
-
-    out = f"<body style='{STYLE}'>{header('LATEST POSTS')}"
-
-    for r in rows:
-        out += card(r["title"])
-
-    return out + "</body>"
-
-# ================= VIDEOS =================
-@app.route("/videos")
-def videos():
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM posts WHERE type='video'")
-    rows = cur.fetchall()
-    conn.close()
-
-    out = f"<body style='{STYLE}'>{header('VIDEOS')}"
-
-    for r in rows:
-        out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
-
-    return out + "</body>"
-
-# ================= NEWS =================
-@app.route("/news")
-def news():
-    return f"<body style='{STYLE}'>{header('TRADING NEWS')}Coming Soon</body>"
-
-# ================= ADMIN =================
+# ================= ADMIN DASHBOARD =================
 @app.route("/admin", methods=["GET","POST"])
 def admin():
     if request.method == "POST":
@@ -286,20 +257,34 @@ def admin():
             return redirect("/admin")
 
     if not session.get("admin"):
-        return """
+        return f"""
+        <body style="{STYLE}">
+        {header("ADMIN LOGIN")}
         <form method="POST">
-            Admin Password:<br>
             <input name="password">
             <button>Login</button>
         </form>
+        </body>
         """
+
+    conn = db()
+    cur = conn.cursor()
+
+    users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    trades = cur.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
+    posts = cur.execute("SELECT COUNT(*) FROM posts").fetchone()[0]
+
+    conn.close()
 
     return f"""
     <body style="{STYLE}">
-    {header("ADMIN PANEL")}
+    {header("ADMIN DASHBOARD")}
 
-    <a href="/create_trade" style="color:{BLUE}">Create Trade</a><br>
-    <a href="/users" style="color:{BLUE}">Users</a><br>
+    {card(f"Users: {users} | Trades: {trades} | Posts: {posts}")}
+
+    {card(btn("➕ Create Trade","/create_trade"))}
+    {card(btn("🧑 Users","/users"))}
+    {card(btn("📡 Manage Trades","/manage"))}
 
     </body>
     """
@@ -320,7 +305,9 @@ def create_trade():
         conn.close()
         return redirect("/admin")
 
-    return """
+    return f"""
+    <body style="{STYLE}">
+    {header("CREATE TRADE")}
     <form method="POST">
         Symbol:<input name="symbol"><br>
         Entry:<input name="entry"><br>
@@ -329,6 +316,7 @@ def create_trade():
         Status:<input name="status"><br>
         <button>Create</button>
     </form>
+    </body>
     """
 
 # ================= USERS =================
@@ -336,13 +324,13 @@ def create_trade():
 def users():
     conn = db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users")
-    rows = cur.fetchall()
+    rows = cur.execute("SELECT * FROM users").fetchall()
     conn.close()
 
-    out = "<body style='background:#0b1220;color:white'><h2>Users</h2>"
+    out = f"<body style='{STYLE}'>{header('USERS')}"
+
     for u in rows:
-        out += f"<div>{u['name']} | {u['code']}</div>"
+        out += card(f"{u['name']} | {u['code']}")
 
     return out + "</body>"
 
