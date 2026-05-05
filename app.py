@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS trades (
     entry REAL,
     sl REAL,
     tp REAL,
-    status TEXT
+    status TEXT,
+    created_at TEXT,
+    expiry_at TEXT
 )
 """)
 
@@ -62,14 +64,28 @@ def execute_trade(symbol, side, entry, sl, tp):
         "entry": float(entry),
         "sl": float(sl),
         "tp": float(tp),
-        "status": "executed"
+        "status": "ACTIVE"
     }
 
 
-# ---------------- REAL-TIME API (NEW) ----------------
+# ---------------- CLASSIFY TRADE STATUS ----------------
+def classify_trade(expiry):
+    if not expiry:
+        return "UNKNOWN"
+
+    now = datetime.now()
+    exp = datetime.fromisoformat(expiry)
+
+    if now > exp:
+        return "EXPIRED"
+
+    return "ACTIVE"
+
+
+# ---------------- LIVE API ----------------
 @app.route("/api/live")
 def live_data():
-    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
+    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 20")
     trades = cur.fetchall()
 
     cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 10")
@@ -88,10 +104,10 @@ def live_data():
 # ---------------- DASHBOARD ----------------
 @app.route("/")
 def dashboard():
-    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 5")
+    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 10")
     trades = cur.fetchall()
 
-    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 3")
+    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 5")
     posts = cur.fetchall()
 
     cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 5")
@@ -110,6 +126,9 @@ def dashboard():
             input, button { width:100%; padding:10px; margin-top:8px; border-radius:6px; border:none; }
             button { background:#22c55e; color:white; cursor:pointer; }
             .box { background:#1e293b; padding:10px; border-radius:8px; margin-top:10px; }
+            .active { border-left:5px solid #22c55e; }
+            .expired { border-left:5px solid #ef4444; opacity:0.6; }
+            .upcoming { border-left:5px solid #facc15; }
         </style>
     </head>
 
@@ -118,19 +137,16 @@ def dashboard():
     <div class="sidebar">
         <h3>🚀 PESAMATRIX</h3>
         <a href="/">Dashboard</a>
-        <a href="#trade">Send Signal</a>
-        <a href="#posts">Posts</a>
-        <a href="#notifications">Notifications</a>
         <a href="/access">Access Page</a>
         <a href="/generate">Generate Code</a>
     </div>
 
     <div class="main">
 
-        <h1>📊 Admin Dashboard (LIVE)</h1>
+        <h1>📊 LIVE TRADING DASHBOARD</h1>
 
-        <!-- TRADE -->
-        <div class="card" id="trade">
+        <!-- TRADE FORM -->
+        <div class="card">
             <h3>Send Trade Signal</h3>
             <form action="/trade" method="post">
                 <input name="symbol" placeholder="Symbol" required>
@@ -142,75 +158,55 @@ def dashboard():
             </form>
         </div>
 
-        <!-- POSTS -->
-        <div class="card" id="posts">
-            <h3>Create Post</h3>
-            <form action="/post" method="post">
-                <input name="title" placeholder="Title" required>
-                <input name="content" placeholder="Content" required>
-                <input name="media_url" placeholder="Image/Video URL">
-                <button>Post</button>
-            </form>
-
-            <h4>Recent Posts</h4>
-            <div id="postsBox">
-                {% for p in posts %}
-                    <div class="box">
-                        <b>{{p[1]}}</b>
-                        <p>{{p[2]}}</p>
-                    </div>
-                {% endfor %}
-            </div>
+        <!-- TRADES -->
+        <div class="card">
+            <h3>Live Trades (Active / Expired)</h3>
+            <div id="tradesBox"></div>
         </div>
 
-        <!-- TRADE -->
+        <!-- POSTS -->
         <div class="card">
-            <h3>Recent Trades</h3>
-            <div id="tradesBox">
-                {% for t in trades %}
-                    <div class="box">
-                        {{t[1]}} - {{t[2]}} @ {{t[3]}}
-                    </div>
-                {% endfor %}
-            </div>
+            <h3>Posts</h3>
+            <div id="postsBox"></div>
         </div>
 
         <!-- NOTIFICATIONS -->
-        <div class="card" id="notifications">
+        <div class="card">
             <h3>Notifications</h3>
-            <div id="notesBox">
-                {% for n in notes %}
-                    <div class="box">
-                        {{n[1]}} <br>
-                        <small>{{n[2]}}</small>
-                    </div>
-                {% endfor %}
-            </div>
+            <div id="notesBox"></div>
         </div>
 
     </div>
 
-    <!-- 🔥 REAL-TIME SCRIPT -->
     <script>
-        async function refreshData(){
+        async function loadData(){
             const res = await fetch("/api/live");
             const data = await res.json();
 
-            // Trades
+            // trades
             let t = "";
             data.trades.forEach(x=>{
-                t += `<div class="box">${x[1]} - ${x[2]} @ ${x[3]}</div>`;
+                let status = x[6];
+                let cls = status === "EXPIRED" ? "expired" : "active";
+
+                t += `<div class="box ${cls}">
+                        <b>${x[1]}</b><br>
+                        ${x[2]} @ ${x[3]}<br>
+                        SL: ${x[4]} TP: ${x[5]}<br>
+                        <small>${status}</small>
+                      </div>`;
             });
+
             document.getElementById("tradesBox").innerHTML = t;
 
-            // Posts
+            // posts
             let p = "";
             data.posts.forEach(x=>{
                 p += `<div class="box"><b>${x[1]}</b><p>${x[2]}</p></div>`;
             });
             document.getElementById("postsBox").innerHTML = p;
 
-            // Notifications
+            // notifications
             let n = "";
             data.notifications.forEach(x=>{
                 n += `<div class="box">${x[1]} <br><small>${x[2]}</small></div>`;
@@ -218,7 +214,8 @@ def dashboard():
             document.getElementById("notesBox").innerHTML = n;
         }
 
-        setInterval(refreshData, 3000);
+        setInterval(loadData, 3000);
+        loadData();
     </script>
 
     </body>
@@ -231,6 +228,9 @@ def dashboard():
 def trade():
     data = request.form
 
+    now = datetime.now()
+    expiry = now + timedelta(hours=4)
+
     result = execute_trade(
         data["symbol"],
         data["side"],
@@ -239,14 +239,25 @@ def trade():
         data["tp"]
     )
 
-    cur.execute(
-        "INSERT INTO trades (symbol, side, entry, sl, tp, status) VALUES (?, ?, ?, ?, ?, ?)",
-        (result["symbol"], result["side"], result["entry"], result["sl"], result["tp"], result["status"])
-    )
+    cur.execute("""
+        INSERT INTO trades 
+        (symbol, side, entry, sl, tp, status, created_at, expiry_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        result["symbol"],
+        result["side"],
+        result["entry"],
+        result["sl"],
+        result["tp"],
+        "ACTIVE",
+        now.isoformat(),
+        expiry.isoformat()
+    ))
 
-    message = f"📢 {result['symbol']} {result['side']} @ {result['entry']}"
-    cur.execute("INSERT INTO notifications (message, created_at) VALUES (?, ?)",
-                (message, datetime.now().isoformat()))
+    cur.execute(
+        "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
+        (f"📢 {result['symbol']} {result['side']} @ {result['entry']}", now.isoformat())
+    )
 
     conn.commit()
     return redirect("/")
@@ -292,11 +303,13 @@ def generate():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
     expiry = datetime.now() + timedelta(days=1)
 
-    cur.execute("INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
-                (code, expiry.isoformat()))
+    cur.execute(
+        "INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
+        (code, expiry.isoformat())
+    )
     conn.commit()
 
-    return f"CODE: {code} (24h)"
+    return f"CODE: {code} (24h valid)"
 
 
 # ---------------- START ----------------
