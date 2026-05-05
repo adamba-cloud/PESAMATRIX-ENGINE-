@@ -13,6 +13,23 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 UPLOAD_FOLDER = "static/uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+BG = "#0b1220"
+CARD = "#111a2e"
+ACCENT = "#38bdf8"
+
+CONTACTS = """
+📞 <a href="tel:+254781585319" style="color:#38bdf8">+254 781 585 319</a><br>
+📞 <a href="tel:+254717434943" style="color:#38bdf8">+254 717 434 943</a><br>
+📧 support@pesamatrix.com<br>
+🎵 TikTok: <a href="https://tiktok.com/@smartgoldsignals" style="color:#38bdf8">@smartgoldsignals</a>
+"""
+
+PAYMENTS = """
+💳 Lipa Na Mpesa<br>
+🏦 Paybill: <b>322372</b><br>
+🔢 Account: <b>Your Unique Join Code</b>
+"""
+
 # ================= DATABASE =================
 def db():
     conn = sqlite3.connect("app.db")
@@ -24,15 +41,17 @@ def init_db():
     conn = db()
     cur = conn.cursor()
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-    )
-    """)
+    cur.execute("""CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)""")
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS trades (
+    cur.execute("""CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        contact TEXT,
+        account_code TEXT,
+        created_at TEXT
+    )""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS trades (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         symbol TEXT,
         side TEXT,
@@ -42,72 +61,28 @@ def init_db():
         status TEXT,
         created_at TEXT,
         expiry_at TEXT
-    )
-    """)
+    )""")
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS access_codes (
+    cur.execute("""CREATE TABLE IF NOT EXISTS access_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT,
         expiry TEXT
-    )
-    """)
+    )""")
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS posts (
+    cur.execute("""CREATE TABLE IF NOT EXISTS posts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         title TEXT,
         content TEXT,
         media TEXT,
         type TEXT,
         created_at TEXT
-    )
-    """)
+    )""")
 
     conn.commit()
     conn.close()
 
 
 init_db()
-
-# ================= SETTINGS =================
-def get_setting(key, default=""):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("SELECT value FROM settings WHERE key=?", (key,))
-    row = cur.fetchone()
-    conn.close()
-    return row["value"] if row else default
-
-
-def set_setting(key, value):
-    conn = db()
-    cur = conn.cursor()
-    cur.execute("REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
-    conn.commit()
-    conn.close()
-
-
-# ================= GLOBAL THEME =================
-BG = "#0b1220"
-CARD = "#111a2e"
-ACCENT = "#38bdf8"
-GREEN = "#22c55e"
-RED = "#ef4444"
-
-CONTACTS = """
-📞 +254 781 585 319 / +254 717 434 943<br>
-📧 support@pesamatrix.com<br>
-📱 Telegram | Instagram | Twitter<br>
-🎵 TikTok: <a href="https://tiktok.com/@smartgoldsignals" style="color:#38bdf8">@smartgoldsignals</a>
-"""
-
-PAYMENTS = """
-💳 Lipa Na Mpesa<br>
-🏦 Paybill: <b>322372</b><br>
-🔢 Account: <b>YOUR UNIQUE SIGN-UP CODE</b>
-"""
-
 
 # ================= HOME =================
 @app.route("/")
@@ -122,46 +97,33 @@ def home():
             background:{BG};
             color:white;
         }}
-
         .nav {{
             display:flex;
             justify-content:space-between;
             padding:15px;
             background:#0f172a;
-            border-bottom:1px solid #1f2937;
         }}
-
-        .logo {{
-            font-size:20px;
-            color:{ACCENT};
-            font-weight:bold;
-        }}
-
         .grid {{
             display:grid;
             grid-template-columns:repeat(2,1fr);
             gap:12px;
             padding:15px;
         }}
-
         .card {{
             background:{CARD};
-            padding:20px;
+            padding:18px;
             border-radius:12px;
             text-align:center;
-            border:1px solid #1f2937;
         }}
-
         a {{
             color:{ACCENT};
             text-decoration:none;
             font-weight:bold;
         }}
-
         .section {{
+            margin:10px;
             padding:15px;
             background:{CARD};
-            margin:10px;
             border-radius:12px;
         }}
     </style>
@@ -170,19 +132,17 @@ def home():
     <body>
 
     <div class="nav">
-        <div class="logo">🚀 PESAMATRIX SIGNALS</div>
-        <a href="/login">ADMIN</a>
+        <h2 style="color:{ACCENT}">🚀 PESAMATRIX</h2>
+        <a href="/login">Admin</a>
     </div>
 
     <div class="grid">
-
         <div class="card"><a href="/videos">🎥 Free Videos</a></div>
         <div class="card"><a href="/news">📰 Trading News</a></div>
         <div class="card"><a href="/access">🔐 Premium Signals</a></div>
         <div class="card"><a href="/posts">📊 Latest Posts</a></div>
         <div class="card"><a href="/register">🟢 Join</a></div>
         <div class="card"><a href="/signals">📈 Signals</a></div>
-
     </div>
 
     <div class="section">
@@ -204,32 +164,43 @@ def home():
     </html>
     """)
 
-
 # ================= REGISTER =================
 @app.route("/register", methods=["GET","POST"])
 def register():
     if request.method == "POST":
-        unique_code = str(uuid.uuid4())[:6].upper()
+        code = str(uuid.uuid4())[:8].upper()
 
         conn = db()
         cur = conn.cursor()
-        cur.execute("INSERT INTO users VALUES (NULL,?,?,?)",
-                    (request.form["name"], request.form["contact"], datetime.now().isoformat()))
+        cur.execute("""
+        INSERT INTO users VALUES (NULL,?,?,?,?)
+        """, (
+            request.form["name"],
+            request.form["contact"],
+            code,
+            datetime.now().isoformat()
+        ))
         conn.commit()
         conn.close()
 
-        return f"JOIN SUCCESS. YOUR ACCOUNT CODE: {unique_code}"
+        return f"""
+        <body style="background:{BG};color:white">
+        <h2>JOIN SUCCESS</h2>
+        <p>Your Account Number:</p>
+        <h1 style="color:{ACCENT}">{code}</h1>
+        <a href="/">Go Home</a>
+        </body>
+        """
 
-    return """
-    <body style="background:#0b1220;color:white">
+    return f"""
+    <body style="background:{BG};color:white">
     <form method='post'>
-        <input name='name' placeholder='Name'><br>
-        <input name='contact' placeholder='Contact'><br>
+        <input name='name' placeholder='Name'><br><br>
+        <input name='contact' placeholder='Contact'><br><br>
         <button>Join</button>
     </form>
     </body>
     """
-
 
 # ================= LOGIN =================
 @app.route("/login", methods=["GET","POST"])
@@ -242,44 +213,27 @@ def login():
 
     return "<body style='background:#0b1220;color:white'><form method='post'><input name='password'><button>Login</button></form></body>"
 
-
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
 
-
 # ================= ADMIN =================
-@app.route("/admin", methods=["GET","POST"])
+@app.route("/admin")
 def admin():
     if not session.get("admin"):
         return redirect("/login")
 
     return f"""
-    <body style="background:{BG};color:white;font-family:Arial">
-
+    <body style="background:{BG};color:white">
     <h1 style="color:{ACCENT}">ADMIN DASHBOARD</h1>
 
-    <h3>Settings</h3>
-    <form method='post'>
-        <input name='about' placeholder='About'><br>
-        <input name='phone' placeholder='Phone'><br>
-        <input name='email' placeholder='Email'><br>
-        <input name='social' placeholder='Social'><br>
-        <input name='bg' placeholder='Background'><br>
-        <input name='font' placeholder='Font'><br>
-        <button>Save</button>
-    </form>
-
-    <br>
     <a href="/generate_code">Generate Code</a><br>
     <a href="/codes">Saved Codes</a><br>
-    <a href="/upload">Upload Media</a><br>
+    <a href="/upload">Upload</a><br>
     <a href="/trade">Create Trade</a><br>
-
     </body>
     """
-
 
 # ================= CODE GENERATOR =================
 @app.route("/generate_code")
@@ -292,41 +246,75 @@ def generate_code():
 
     conn = db()
     cur = conn.cursor()
-    cur.execute("INSERT INTO access_codes VALUES (NULL,?,?)",
-                (code, expiry.isoformat()))
+    cur.execute("INSERT INTO access_codes VALUES (NULL,?,?)", (code, expiry.isoformat()))
     conn.commit()
     conn.close()
 
     return f"<body style='background:{BG};color:white'>CODE: {code}</body>"
 
-
-# ================= SIGNALS (LOCKED) =================
-@app.route("/signals")
-def signals():
-    if not session.get("access"):
-        return redirect("/access")
+@app.route("/codes")
+def codes():
+    if not session.get("admin"):
+        return redirect("/login")
 
     conn = db()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    cur.execute("SELECT * FROM access_codes ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
 
-    out = f"<body style='background:{BG};color:white'><h1>🔐 PREMIUM SIGNALS</h1>"
-
+    out = "<body style='background:#0b1220;color:white'><h1>CODES</h1>"
     for r in rows:
-        out += f"""
-        <div style='background:{CARD};margin:10px;padding:15px;border-radius:12px'>
-            📊 Pair: {r['symbol']}<br>
-            📥 Entry: {r['entry']}<br>
-            🎯 TP: {r['tp']}<br>
-            🛑 SL: {r['sl']}<br>
-            📌 Status: {r['status']}
-        </div>
-        """
-
+        out += f"<div>{r['code']} | {r['expiry']}</div>"
     return out + "</body>"
 
+# ================= UPLOAD =================
+@app.route("/upload", methods=["GET","POST"])
+def upload():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    if request.method == "POST":
+        file = request.files["file"]
+        filename = secure_filename(file.filename)
+        path = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(path)
+
+        media_type = "image"
+        if filename.endswith(("mp4","mov")):
+            media_type = "video"
+
+        conn = db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO posts VALUES (NULL,?,?,?,?,?)",
+                    (request.form["title"], request.form["content"], path, media_type, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+
+        return redirect("/admin")
+
+    return "<body style='background:#0b1220;color:white'><form method='post' enctype='multipart/form-data'><input name='title'><input name='content'><input type='file' name='file'><button>Upload</button></form></body>"
+
+# ================= TRADE =================
+@app.route("/trade", methods=["GET","POST"])
+def trade():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    if request.method == "POST":
+        conn = db()
+        cur = conn.cursor()
+        cur.execute("INSERT INTO trades VALUES (NULL,?,?,?,?,?,?,?,?)",
+                    (request.form["symbol"], request.form["side"],
+                     float(request.form["entry"]), float(request.form["sl"]),
+                     float(request.form["tp"]), "ACTIVE",
+                     datetime.now().isoformat(),
+                     (datetime.now()+timedelta(hours=4)).isoformat()))
+        conn.commit()
+        conn.close()
+        return redirect("/admin")
+
+    return "<body style='background:#0b1220;color:white'><form method='post'><input name='symbol'><input name='side'><input name='entry'><input name='sl'><input name='tp'><button>Create</button></form></body>"
 
 # ================= ACCESS =================
 @app.route("/access", methods=["GET","POST"])
@@ -348,6 +336,73 @@ def access():
 
     return "<body style='background:#0b1220;color:white'><form method='post'><input name='code'><button>Unlock</button></form></body>"
 
+# ================= SIGNALS =================
+@app.route("/signals")
+def signals():
+    if not session.get("access"):
+        return redirect("/access")
+
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = "<body style='background:#0b1220;color:white'><h1>🔐 SIGNALS</h1>"
+
+    for r in rows:
+        out += f"""
+        <div style='background:#111a2e;margin:10px;padding:15px;border-radius:12px'>
+            📊 {r['symbol']}<br>
+            📥 Entry: {r['entry']}<br>
+            🎯 TP: {r['tp']}<br>
+            🛑 SL: {r['sl']}<br>
+        </div>
+        """
+
+    return out + "</body>"
+
+# ================= NEWS =================
+@app.route("/news")
+def news():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = "<body style='background:#0b1220;color:white'><h1>NEWS</h1>"
+    for r in rows:
+        out += f"<div style='background:#111a2e;margin:10px;padding:10px'>{r['title']}</div>"
+    return out + "</body>"
+
+# ================= VIDEOS =================
+@app.route("/videos")
+def videos():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts WHERE type='video'")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = "<body style='background:#0b1220;color:white'><h1>VIDEOS</h1>"
+    for r in rows:
+        out += f"<video controls width='100%'><source src='/{r['media']}'></video>"
+    return out + "</body>"
+
+# ================= POSTS =================
+@app.route("/posts")
+def posts():
+    conn = db()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM posts ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
+
+    out = "<body style='background:#0b1220;color:white'><h1>POSTS</h1>"
+    for r in rows:
+        out += f"<div style='background:#111a2e;margin:10px;padding:10px'>{r['title']}</div>"
+    return out + "</body>"
 
 # ================= START =================
 if __name__ == "__main__":
