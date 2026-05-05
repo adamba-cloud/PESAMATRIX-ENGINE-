@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS access_codes (
 )
 """)
 
-# 🔔 NOTIFICATIONS TABLE (NEW UPGRADE)
 cur.execute("""
 CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,26 +77,25 @@ def home():
             <h3>Create Signal</h3>
 
             <form action="/trade" method="post">
-                <input name="symbol" placeholder="Symbol (EURUSD)" required>
+                <input name="symbol" placeholder="Symbol" required>
                 <input name="side" placeholder="BUY / SELL" required>
                 <input name="entry" placeholder="Entry Price" required>
                 <input name="sl" placeholder="Stop Loss" required>
                 <input name="tp" placeholder="Take Profit" required>
-
                 <button type="submit">SEND SIGNAL</button>
             </form>
         </div>
 
-        <a href="/signals">📊 View Live Signals</a><br>
+        <a href="/signals">📊 Signals</a><br>
         <a href="/notifications">🔔 Notifications</a><br>
-        <a href="/access">🔐 Subscriber Access</a><br>
-        <a href="/generate">🧾 Generate Access Code</a>
+        <a href="/access">🔐 Access</a><br>
+        <a href="/generate">🧾 Generate Code</a>
 
     </body>
     </html>
     """)
 
-# ---------------- TRADE ROUTE + NOTIFICATIONS ----------------
+# ---------------- TRADE + NOTIFICATION ----------------
 @app.route("/trade", methods=["POST"])
 def trade():
     data = request.form
@@ -110,32 +108,22 @@ def trade():
         data["tp"]
     )
 
-    # SAVE TRADE
     cur.execute(
         "INSERT INTO trades (symbol, side, entry, sl, tp, status) VALUES (?, ?, ?, ?, ?, ?)",
-        (
-            result["symbol"],
-            result["side"],
-            result["entry"],
-            result["sl"],
-            result["tp"],
-            result["status"]
-        )
+        (result["symbol"], result["side"], result["entry"], result["sl"], result["tp"], result["status"])
     )
 
-    # 🔔 CREATE NOTIFICATION (NEW FEATURE)
-    message = f"📢 New Signal: {result['symbol']} {result['side']} @ {result['entry']}"
-
+    # notification
+    message = f"📢 {result['symbol']} {result['side']} @ {result['entry']}"
     cur.execute(
         "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
         (message, datetime.now().isoformat())
     )
 
     conn.commit()
-
     return jsonify(result)
 
-# ---------------- NOTIFICATIONS PAGE ----------------
+# ---------------- NOTIFICATIONS ----------------
 @app.route("/notifications")
 def notifications():
     cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 20")
@@ -147,17 +135,11 @@ def notifications():
         <title>Notifications</title>
         <style>
             body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box {
-                background:#1e293b;
-                margin:15px auto;
-                padding:15px;
-                width:350px;
-                border-radius:10px;
-            }
+            .box { background:#1e293b; margin:15px auto; padding:15px; width:350px; border-radius:10px; }
         </style>
     </head>
     <body>
-        <h1>🔔 LIVE NOTIFICATIONS</h1>
+        <h1>🔔 Notifications</h1>
     """
 
     for r in rows:
@@ -171,7 +153,7 @@ def notifications():
     html += "</body></html>"
     return render_template_string(html)
 
-# ---------------- ACCESS PAGE ----------------
+# ---------------- ACCESS (FIXED UI) ----------------
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -187,14 +169,83 @@ def access():
                 session["access"] = True
                 return redirect("/signals")
 
-        return "Invalid or expired code ❌"
+        return render_template_string("""
+        <html>
+        <head>
+            <style>
+                body {
+                    margin:0;
+                    font-family: Arial;
+                    background:#0f172a;
+                    color:white;
+                    display:flex;
+                    justify-content:center;
+                    align-items:center;
+                    height:100vh;
+                }
+                .box {
+                    background:#1e293b;
+                    padding:30px;
+                    border-radius:12px;
+                    text-align:center;
+                }
+                a { color:#38bdf8; }
+            </style>
+        </head>
+        <body>
+            <div class="box">
+                <h2>❌ Invalid Code</h2>
+                <a href="/access">Try again</a>
+            </div>
+        </body>
+        </html>
+        """)
 
     return render_template_string("""
-    <h2>Subscriber Access</h2>
-    <form method="post">
-        <input name="code" placeholder="ACCESS CODE" required>
-        <button type="submit">Unlock</button>
-    </form>
+    <html>
+    <head>
+        <style>
+            body {
+                margin:0;
+                font-family: Arial;
+                background:#0f172a;
+                color:white;
+                display:flex;
+                justify-content:center;
+                align-items:center;
+                height:100vh;
+            }
+            .box {
+                background:#1e293b;
+                padding:30px;
+                border-radius:12px;
+                text-align:center;
+                width:300px;
+            }
+            input, button {
+                width:100%;
+                padding:12px;
+                margin-top:10px;
+                border:none;
+                border-radius:6px;
+            }
+            button {
+                background:#22c55e;
+                color:white;
+                cursor:pointer;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <h2>🔐 Access</h2>
+            <form method="post">
+                <input name="code" placeholder="Enter code" required>
+                <button>Unlock</button>
+            </form>
+        </div>
+    </body>
+    </html>
     """)
 
 # ---------------- SIGNALS ----------------
@@ -212,32 +263,21 @@ def signals():
         <title>Signals</title>
         <style>
             body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box {
-                background:#1e293b;
-                margin:15px auto;
-                padding:15px;
-                width:300px;
-                border-radius:10px;
-            }
-            .buy { color:#22c55e; font-weight:bold; }
-            .sell { color:#ef4444; font-weight:bold; }
+            .box { background:#1e293b; margin:15px auto; padding:15px; width:300px; border-radius:10px; }
         </style>
     </head>
     <body>
-        <h1>📊 LIVE SIGNALS</h1>
+        <h1>📊 Signals</h1>
     """
 
     for r in rows:
-        color = "buy" if r[2] == "BUY" else "sell"
-
         html += f"""
         <div class="box">
             <h3>{r[1]}</h3>
-            <p class="{color}">{r[2]}</p>
+            <p>{r[2]}</p>
             <p>Entry: {r[3]}</p>
             <p>SL: {r[4]}</p>
             <p>TP: {r[5]}</p>
-            <p>Status: {r[6]}</p>
         </div>
         """
 
@@ -256,10 +296,9 @@ def generate_code():
     )
     conn.commit()
 
-    return f"New Code: {code} (valid 24hrs)"
+    return f"CODE: {code} (24h valid)"
 
 # ---------------- START ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print("Server running on port", port)
     app.run(host="0.0.0.0", port=port)
