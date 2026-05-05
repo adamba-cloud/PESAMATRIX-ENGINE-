@@ -3,12 +3,20 @@ import sqlite3
 import random
 import string
 from datetime import datetime, timedelta
+
 from flask import Flask, request, redirect, session, render_template_string
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
+# ================= ADMIN SECURITY =================
 ADMIN_PASSWORD = "admin123"
+
+# ================= UPLOAD CONFIG =================
+UPLOAD_FOLDER = "static/uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 # ================= DATABASE =================
 conn = sqlite3.connect("trades.db", check_same_thread=False)
@@ -51,16 +59,19 @@ CREATE TABLE IF NOT EXISTS posts (
     title TEXT,
     content TEXT,
     media_url TEXT,
+    media_type TEXT,
     created_at TEXT
 )
 """)
 
 conn.commit()
 
+
 # ================= ROOT =================
 @app.route("/")
 def root():
     return redirect("/public")
+
 
 # ================= PUBLIC PAGE =================
 @app.route("/public")
@@ -69,10 +80,22 @@ def public():
     posts = cur.fetchall()
 
     html_posts = ""
+
     for p in posts:
-        media = f"<img src='{p[3]}' class='media'>" if p[3] else ""
+        media = ""
+
+        if p[4] == "image":
+            media = f"<img src='/{p[3]}' style='width:100%;border-radius:10px;'>"
+
+        elif p[4] == "video":
+            media = f"""
+            <video controls style="width:100%;border-radius:10px;">
+                <source src="/{p[3]}" type="video/mp4">
+            </video>
+            """
+
         html_posts += f"""
-        <div class='card fade'>
+        <div style="background:#1e293b;margin:10px;padding:15px;border-radius:12px">
             <h3>{p[1]}</h3>
             <p>{p[2]}</p>
             {media}
@@ -83,11 +106,10 @@ def public():
     <html>
     <head>
         <title>PESAMATRIX</title>
-
         <style>
             body {{
                 margin:0;
-                font-family: 'Segoe UI';
+                font-family:Arial;
                 background:#0f172a;
                 color:white;
             }}
@@ -95,51 +117,28 @@ def public():
             .nav {{
                 display:flex;
                 justify-content:space-between;
-                padding:20px;
+                padding:15px;
                 background:#111827;
-            }}
-
-            .logo {{
-                height:40px;
             }}
 
             .hero {{
                 text-align:center;
-                padding:60px 20px;
+                padding:50px;
             }}
 
             .hero h1 {{
                 font-size:40px;
-                background: linear-gradient(to right,#38bdf8,#22c55e);
-                -webkit-background-clip:text;
-                color:transparent;
+                color:#38bdf8;
             }}
 
             .section {{
-                padding:40px;
-            }}
-
-            .grid {{
-                display:grid;
-                grid-template-columns:1fr 1fr;
-                gap:20px;
-            }}
-
-            .card {{
-                background:#1e293b;
                 padding:20px;
-                border-radius:12px;
-                transition:0.3s;
-            }}
-
-            .card:hover {{
-                transform:translateY(-5px);
             }}
 
             input,button {{
-                padding:12px;
-                width:100%;
-                margin-top:10px;
+                padding:10px;
+                margin-top:8px;
+                width:250px;
                 border:none;
                 border-radius:8px;
             }}
@@ -149,76 +148,88 @@ def public():
                 color:white;
                 cursor:pointer;
             }}
-
-            .media {{
-                width:100%;
-                border-radius:10px;
-                margin-top:10px;
-            }}
-
-            .fade {{
-                animation:fadeIn 1s ease;
-            }}
-
-            @keyframes fadeIn {{
-                from {{opacity:0; transform:translateY(10px)}}
-                to {{opacity:1}}
-            }}
         </style>
     </head>
 
     <body>
 
     <div class="nav">
-        <img src="/static/logo.png" class="logo">
-        <a href="/login">Admin</a>
+        <h2>🚀 PESAMATRIX</h2>
+        <a href="/login" style="color:#38bdf8;">Admin</a>
     </div>
 
     <div class="hero">
-        <h1>AI-Powered Trading Signals</h1>
-        <p>Trade smarter. Not harder.</p>
-    </div>
-
-    <div class="section grid">
-        <div class="card">
-            <h2>About</h2>
-            <p>Premium forex & crypto signals powered by smart analytics.</p>
-        </div>
-
-        <div class="card">
-            <h2>Contacts</h2>
-            <p>📞 +254...</p>
-            <p>📱 Telegram | Instagram</p>
-        </div>
+        <h1>AI Trading Signal Platform</h1>
+        <p>Forex • Crypto • Smart Signals</p>
     </div>
 
     <div class="section">
+        <h2>About</h2>
+        <p>We deliver high accuracy trading signals in real time.</p>
+
+        <h2>Contacts</h2>
+        <p>📞 +254 700 000 000</p>
+        <p>📧 support@pesamatrix.com</p>
+        <p>📱 Telegram | Instagram | Twitter</p>
+
         <h2>Services</h2>
-        <div class="grid">
-            <div class="card">🎥 Free Videos</div>
-            <div class="card">📰 Market News</div>
-            <div class="card">🔐 Premium Signals</div>
-            <div class="card"><a href="/access">Unlock Signals</a></div>
-        </div>
+        <p>🎥 Free Videos</p>
+        <p>📰 Trading News</p>
+        <p>🔐 Premium Signals</p>
+        <a href="/access">Unlock Signals</a>
     </div>
 
     <div class="section">
-        <h2>Market Intelligence</h2>
+        <h2>Latest Posts</h2>
         {html_posts}
     </div>
 
     <div class="section">
-        <h2>Join Platform</h2>
+        <h2>Join</h2>
         <form action="/register" method="post">
-            <input name="name" placeholder="Name">
-            <input name="contact" placeholder="Phone or Email">
-            <button>Join Now</button>
+            <input name="name" placeholder="Name"><br>
+            <input name="contact" placeholder="Phone or Email"><br>
+            <button>Join</button>
         </form>
     </div>
 
     </body>
     </html>
     """
+
+
+# ================= REGISTER =================
+@app.route("/register", methods=["POST"])
+def register():
+    cur.execute(
+        "INSERT INTO users (name, contact, created_at) VALUES (?, ?, ?)",
+        (request.form["name"], request.form["contact"], datetime.now().isoformat())
+    )
+    conn.commit()
+    return redirect("/public")
+
+
+# ================= LOGIN =================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if request.form["password"] == ADMIN_PASSWORD:
+            session["admin"] = True
+            return redirect("/admin")
+        return "Wrong password"
+
+    return """
+    <form method="post">
+        <input name="password" placeholder="Admin Password">
+        <button>Login</button>
+    </form>
+    """
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
 
 
 # ================= ADMIN DASHBOARD =================
@@ -231,91 +242,88 @@ def admin():
     trades = cur.fetchall()
 
     return render_template_string("""
-    <html>
-    <head>
-        <style>
-            body {margin:0;font-family:Arial;background:#0f172a;color:white;}
-            .sidebar {width:220px;background:#111827;height:100vh;position:fixed;padding:20px;}
-            .sidebar a {display:block;color:#38bdf8;margin:10px 0;text-decoration:none;}
-            .main {margin-left:240px;padding:20px;}
-            .card {background:#1e293b;padding:20px;margin-bottom:15px;border-radius:12px;}
-            input,select,button {width:100%;padding:10px;margin-top:8px;border-radius:8px;border:none;}
-            button {background:#22c55e;color:white;}
-            .trade {background:#111827;padding:10px;margin-top:10px;border-radius:10px;}
-        </style>
-    </head>
+    <body style="background:#0f172a;color:white;font-family:Arial">
 
-    <body>
+    <h1>🚀 ADMIN DASHBOARD</h1>
 
-    <div class="sidebar">
-        <img src="/static/logo.png" width="150"><br><br>
-        <a href="/admin">Dashboard</a>
-        <a href="/generate">Access Codes</a>
-        <a href="/logout">Logout</a>
+    <a href="/logout">Logout</a>
+
+    <h3>Create Trade</h3>
+    <form action="/trade" method="post">
+        <input name="symbol" placeholder="Symbol"><br>
+        <input name="side"><br>
+        <input name="entry"><br>
+        <input name="sl"><br>
+        <input name="tp"><br>
+        <button>Create</button>
+    </form>
+
+    <h3>Update Status</h3>
+    <form action="/update_status" method="post">
+        <input name="id" placeholder="Trade ID"><br>
+        <select name="status">
+            <option>ACTIVE</option>
+            <option>EXPIRED</option>
+            <option>UPCOMING</option>
+        </select>
+        <button>Update</button>
+    </form>
+
+    <h3>Upload Media (Image / Video)</h3>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input name="title" placeholder="Title"><br>
+        <input name="content" placeholder="Content"><br>
+        <input type="file" name="file"><br>
+        <button>Upload</button>
+    </form>
+
+    <h3>Live Trades</h3>
+    {% for t in trades %}
+    <div style="background:#1e293b;margin:10px;padding:10px">
+        <b>{{t[1]}}</b> {{t[2]}}<br>
+        Entry: {{t[3]}} SL: {{t[4]}} TP: {{t[5]}}<br>
+        Status: {{t[6]}}
     </div>
-
-    <div class="main">
-
-        <div class="card">
-            <h3>🚀 Deploy Trade</h3>
-            <form action="/trade" method="post">
-                <input name="symbol" placeholder="Symbol">
-                <input name="side">
-                <input name="entry">
-                <input name="sl">
-                <input name="tp">
-                <button>Deploy</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h3>🧠 Update Status</h3>
-            <form action="/update_status" method="post">
-                <input name="id" placeholder="Trade ID">
-                <select name="status">
-                    <option>ACTIVE</option>
-                    <option>EXPIRED</option>
-                    <option>UPCOMING</option>
-                </select>
-                <button>Update</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <h3>📊 Live Trades</h3>
-            {% for t in trades %}
-            <div class="trade">
-                <b>{{t[1]}}</b> {{t[2]}}<br>
-                Entry: {{t[3]}} | SL: {{t[4]}} | TP: {{t[5]}}<br>
-                Status: {{t[6]}}
-            </div>
-            {% endfor %}
-        </div>
-
-    </div>
+    {% endfor %}
 
     </body>
-    </html>
     """, trades=trades)
 
 
-# ================= LOGIN =================
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        if request.form["password"] == ADMIN_PASSWORD:
-            session["admin"] = True
-            return redirect("/admin")
-    return "<form method='post'><input name='password'><button>Login</button></form>"
+# ================= UPLOAD MEDIA =================
+@app.route("/upload", methods=["POST"])
+def upload():
+    if not session.get("admin"):
+        return redirect("/login")
+
+    file = request.files["file"]
+
+    if file:
+        filename = secure_filename(file.filename)
+        path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(path)
+
+        media_type = "image"
+        if filename.lower().endswith((".mp4", ".mov", ".avi")):
+            media_type = "video"
+
+        cur.execute("""
+        INSERT INTO posts (title, content, media_url, media_type, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """, (
+            request.form["title"],
+            request.form["content"],
+            path,
+            media_type,
+            datetime.now().isoformat()
+        ))
+
+        conn.commit()
+
+    return redirect("/admin")
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/login")
-
-
-# ================= CORE FUNCTIONS =================
+# ================= TRADE =================
 @app.route("/trade", methods=["POST"])
 def trade():
     now = datetime.now()
@@ -339,6 +347,7 @@ def trade():
     return redirect("/admin")
 
 
+# ================= STATUS UPDATE =================
 @app.route("/update_status", methods=["POST"])
 def update_status():
     cur.execute("UPDATE trades SET status=? WHERE id=?",
@@ -347,19 +356,50 @@ def update_status():
     return redirect("/admin")
 
 
-@app.route("/generate")
-def generate():
-    if not session.get("admin"):
-        return redirect("/login")
+# ================= ACCESS SYSTEM =================
+@app.route("/access", methods=["GET", "POST"])
+def access():
+    if request.method == "POST":
+        code = request.form["code"]
 
-    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-    expiry = datetime.now() + timedelta(days=1)
+        cur.execute("SELECT * FROM access_codes WHERE code=?", (code,))
+        result = cur.fetchone()
 
-    cur.execute("INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
-                (code, expiry.isoformat()))
-    conn.commit()
+        if result and datetime.now() < datetime.fromisoformat(result[2]):
+            session["access"] = True
+            return redirect("/signals")
 
-    return redirect("/admin")
+        return "Invalid code"
+
+    return """
+    <form method="post">
+        <input name="code">
+        <button>Unlock</button>
+    </form>
+    """
+
+
+# ================= SIGNALS =================
+@app.route("/signals")
+def signals():
+    if not session.get("access"):
+        return redirect("/access")
+
+    cur.execute("SELECT * FROM trades ORDER BY id DESC")
+    rows = cur.fetchall()
+
+    html = "<h1>Premium Signals</h1>"
+
+    for r in rows:
+        html += f"""
+        <div style='background:#1e293b;margin:10px;padding:10px'>
+            {r[1]} {r[2]}<br>
+            Entry: {r[3]} SL: {r[4]} TP: {r[5]}<br>
+            Status: {r[6]}
+        </div>
+        """
+
+    return html
 
 
 # ================= START =================
