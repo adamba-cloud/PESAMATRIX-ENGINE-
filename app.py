@@ -41,7 +41,6 @@ CREATE TABLE IF NOT EXISTS notifications (
 )
 """)
 
-# 🆕 POSTS TABLE (CONTENT SYSTEM)
 cur.execute("""
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +53,7 @@ CREATE TABLE IF NOT EXISTS posts (
 
 conn.commit()
 
+
 # ---------------- TRADE LOGIC ----------------
 def execute_trade(symbol, side, entry, sl, tp):
     return {
@@ -65,58 +65,164 @@ def execute_trade(symbol, side, entry, sl, tp):
         "status": "executed"
     }
 
-# ---------------- HOME (ADMIN PANEL) ----------------
+
+# ---------------- SINGLE DASHBOARD ----------------
 @app.route("/")
-def home():
+def dashboard():
+    cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 5")
+    trades = cur.fetchall()
+
+    cur.execute("SELECT * FROM posts ORDER BY id DESC LIMIT 3")
+    posts = cur.fetchall()
+
+    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 5")
+    notes = cur.fetchall()
+
     return render_template_string("""
     <html>
     <head>
-        <title>PESAMATRIX</title>
+        <title>PESAMATRIX DASHBOARD</title>
         <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .card { background:#1e293b; padding:20px; margin:20px auto; width:350px; border-radius:10px; }
-            input { width:100%; padding:10px; margin:5px 0; }
-            button { width:100%; padding:10px; background:#22c55e; color:white; border:none; cursor:pointer; }
-            a { color:#38bdf8; display:block; margin:5px; }
+            body {
+                margin:0;
+                font-family: Arial;
+                background:#0f172a;
+                color:white;
+            }
+
+            .sidebar {
+                width:220px;
+                height:100vh;
+                background:#111827;
+                position:fixed;
+                padding:20px;
+            }
+
+            .sidebar a {
+                display:block;
+                color:#38bdf8;
+                margin:12px 0;
+                text-decoration:none;
+            }
+
+            .main {
+                margin-left:240px;
+                padding:20px;
+            }
+
+            .card {
+                background:#1e293b;
+                padding:15px;
+                border-radius:10px;
+                margin-bottom:15px;
+            }
+
+            input, button {
+                width:100%;
+                padding:10px;
+                margin-top:8px;
+                border-radius:6px;
+                border:none;
+            }
+
+            button {
+                background:#22c55e;
+                color:white;
+                cursor:pointer;
+            }
+
+            .grid {
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:15px;
+            }
+
+            .box {
+                background:#1e293b;
+                padding:10px;
+                border-radius:8px;
+                margin-top:10px;
+            }
         </style>
     </head>
+
     <body>
 
-        <h1>🚀 PESAMATRIX ADMIN PANEL</h1>
+    <div class="sidebar">
+        <h3>🚀 PESAMATRIX</h3>
+        <a href="/">Dashboard</a>
+        <a href="#trade">Send Signal</a>
+        <a href="#posts">Posts</a>
+        <a href="#notifications">Notifications</a>
+        <a href="/access">Access Page</a>
+        <a href="/generate">Generate Code</a>
+    </div>
 
-        <div class="card">
-            <h3>Create Signal</h3>
+    <div class="main">
+
+        <h1>📊 Admin Dashboard</h1>
+
+        <!-- TRADE -->
+        <div class="card" id="trade">
+            <h3>Send Trade Signal</h3>
             <form action="/trade" method="post">
                 <input name="symbol" placeholder="Symbol" required>
                 <input name="side" placeholder="BUY / SELL" required>
-                <input name="entry" placeholder="Entry Price" required>
-                <input name="sl" placeholder="Stop Loss" required>
-                <input name="tp" placeholder="Take Profit" required>
-                <button type="submit">SEND SIGNAL</button>
+                <input name="entry" placeholder="Entry" required>
+                <input name="sl" placeholder="SL" required>
+                <input name="tp" placeholder="TP" required>
+                <button>Send Signal</button>
             </form>
         </div>
 
-        <div class="card">
-            <h3>📢 Post Trading Content</h3>
+        <!-- POSTS -->
+        <div class="card" id="posts">
+            <h3>Create Post (News / Image / Video)</h3>
             <form action="/post" method="post">
                 <input name="title" placeholder="Title" required>
-                <input name="content" placeholder="Content / News" required>
-                <input name="media_url" placeholder="Image or Video URL (optional)">
-                <button type="submit">POST</button>
+                <input name="content" placeholder="Content" required>
+                <input name="media_url" placeholder="Image/Video URL">
+                <button>Post</button>
             </form>
+
+            <h4>Recent Posts</h4>
+            {% for p in posts %}
+                <div class="box">
+                    <b>{{p[1]}}</b>
+                    <p>{{p[2]}}</p>
+                </div>
+            {% endfor %}
         </div>
 
-        <a href="/signals">📊 Signals</a>
-        <a href="/posts">📰 Trading Feed</a>
-        <a href="/notifications">🔔 Notifications</a>
-        <a href="/access">🔐 Access</a>
-        <a href="/generate">🧾 Generate Code</a>
+        <!-- SIGNALS -->
+        <div class="card">
+            <h3>Recent Trades</h3>
+            {% for t in trades %}
+                <div class="box">
+                    {{t[1]}} - {{t[2]}} @ {{t[3]}}
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- NOTIFICATIONS -->
+        <div class="card" id="notifications">
+            <h3>Notifications</h3>
+            {% for n in notes %}
+                <div class="box">
+                    {{n[1]}} <br>
+                    <small>{{n[2]}}</small>
+                </div>
+            {% endfor %}
+        </div>
+
+    </div>
 
     </body>
     </html>
-    """)
+    """, trades=trades, posts=posts, notes=notes)
 
-# ---------------- TRADE + NOTIFICATION ----------------
+
+# ---------------- TRADE ----------------
 @app.route("/trade", methods=["POST"])
 def trade():
     data = request.form
@@ -135,97 +241,26 @@ def trade():
     )
 
     message = f"📢 {result['symbol']} {result['side']} @ {result['entry']}"
-    cur.execute(
-        "INSERT INTO notifications (message, created_at) VALUES (?, ?)",
-        (message, datetime.now().isoformat())
-    )
+    cur.execute("INSERT INTO notifications (message, created_at) VALUES (?, ?)",
+                (message, datetime.now().isoformat()))
 
     conn.commit()
-    return jsonify(result)
+    return redirect("/")
 
-# ---------------- CONTENT POST (NEW FEATURE) ----------------
+
+# ---------------- POSTS ----------------
 @app.route("/post", methods=["POST"])
 def post():
     title = request.form["title"]
     content = request.form["content"]
-    media_url = request.form.get("media_url", "")
+    media = request.form.get("media_url", "")
 
-    cur.execute("""
-        INSERT INTO posts (title, content, media_url, created_at)
-        VALUES (?, ?, ?, ?)
-    """, (title, content, media_url, datetime.now().isoformat()))
+    cur.execute("INSERT INTO posts (title, content, media_url, created_at) VALUES (?, ?, ?, ?)",
+                (title, content, media, datetime.now().isoformat()))
 
     conn.commit()
+    return redirect("/")
 
-    return jsonify({"status": "post created"})
-
-# ---------------- POSTS PAGE (TRADING FEED) ----------------
-@app.route("/posts")
-def posts():
-    cur.execute("SELECT * FROM posts ORDER BY id DESC")
-    rows = cur.fetchall()
-
-    html = """
-    <html>
-    <head>
-        <title>Trading Feed</title>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box { background:#1e293b; margin:15px auto; padding:15px; width:320px; border-radius:10px; }
-            img, iframe { width:100%; border-radius:8px; margin-top:10px; }
-        </style>
-    </head>
-    <body>
-        <h1>📰 Trading Feed</h1>
-    """
-
-    for r in rows:
-        html += f"""
-        <div class="box">
-            <h3>{r[1]}</h3>
-            <p>{r[2]}</p>
-        """
-
-        if r[3]:
-            if "youtube" in r[3]:
-                html += f'<iframe src="{r[3]}" frameborder="0"></iframe>'
-            else:
-                html += f'<img src="{r[3]}">'
-
-        html += "</div>"
-
-    html += "</body></html>"
-    return render_template_string(html)
-
-# ---------------- NOTIFICATIONS ----------------
-@app.route("/notifications")
-def notifications():
-    cur.execute("SELECT * FROM notifications ORDER BY id DESC LIMIT 20")
-    rows = cur.fetchall()
-
-    html = """
-    <html>
-    <head>
-        <title>Notifications</title>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box { background:#1e293b; margin:15px auto; padding:15px; width:350px; border-radius:10px; }
-        </style>
-    </head>
-    <body>
-        <h1>🔔 Notifications</h1>
-    """
-
-    for r in rows:
-        html += f"""
-        <div class="box">
-            <p>{r[1]}</p>
-            <small>{r[2]}</small>
-        </div>
-        """
-
-    html += "</body></html>"
-    return render_template_string(html)
 
 # ---------------- ACCESS ----------------
 @app.route("/access", methods=["GET", "POST"])
@@ -236,72 +271,27 @@ def access():
         cur.execute("SELECT * FROM access_codes WHERE code=?", (code,))
         result = cur.fetchone()
 
-        if result:
-            expiry = datetime.fromisoformat(result[2])
+        if result and datetime.now() < datetime.fromisoformat(result[2]):
+            session["access"] = True
+            return redirect("/")
 
-            if datetime.now() < expiry:
-                session["access"] = True
-                return redirect("/signals")
+        return "Invalid code"
 
-        return "Invalid or expired code ❌"
+    return "<h2>Enter Access Code</h2><form method='post'><input name='code'><button>Enter</button></form>"
 
-    return render_template_string("""
-    <h2>Subscriber Access</h2>
-    <form method="post">
-        <input name="code" placeholder="ACCESS CODE" required>
-        <button type="submit">Unlock</button>
-    </form>
-    """)
-
-# ---------------- SIGNALS ----------------
-@app.route("/signals")
-def signals():
-    if not session.get("access"):
-        return redirect("/access")
-
-    cur.execute("SELECT * FROM trades ORDER BY id DESC")
-    rows = cur.fetchall()
-
-    html = """
-    <html>
-    <head>
-        <title>Signals</title>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
-            .box { background:#1e293b; margin:15px auto; padding:15px; width:300px; border-radius:10px; }
-        </style>
-    </head>
-    <body>
-        <h1>📊 Signals</h1>
-    """
-
-    for r in rows:
-        html += f"""
-        <div class="box">
-            <h3>{r[1]}</h3>
-            <p>{r[2]}</p>
-            <p>Entry: {r[3]}</p>
-            <p>SL: {r[4]}</p>
-            <p>TP: {r[5]}</p>
-        </div>
-        """
-
-    html += "</body></html>"
-    return render_template_string(html)
 
 # ---------------- GENERATE CODE ----------------
 @app.route("/generate")
-def generate_code():
+def generate():
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
     expiry = datetime.now() + timedelta(days=1)
 
-    cur.execute(
-        "INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
-        (code, expiry.isoformat())
-    )
+    cur.execute("INSERT INTO access_codes (code, expiry_date) VALUES (?, ?)",
+                (code, expiry.isoformat()))
     conn.commit()
 
-    return f"CODE: {code} (24h valid)"
+    return f"CODE: {code} (24h)"
+
 
 # ---------------- START ----------------
 if __name__ == "__main__":
