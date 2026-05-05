@@ -4,12 +4,11 @@ import random
 import string
 from datetime import datetime, timedelta
 
-from flask import Flask, request, jsonify, render_template_string, redirect, session
+from flask import Flask, request, redirect, session, render_template_string
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# ================= ADMIN SECURITY =================
 ADMIN_PASSWORD = "admin123"
 
 # ================= DATABASE =================
@@ -60,36 +59,6 @@ CREATE TABLE IF NOT EXISTS posts (
 conn.commit()
 
 
-# ================= TRADE LOGIC =================
-def execute_trade(symbol, side, entry, sl, tp):
-    return {
-        "symbol": symbol,
-        "side": side,
-        "entry": float(entry),
-        "sl": float(sl),
-        "tp": float(tp),
-        "status": "UPCOMING"
-    }
-
-
-def trade_status(expiry, manual_status=None):
-    if manual_status:
-        return manual_status
-
-    try:
-        exp = datetime.fromisoformat(expiry)
-        now = datetime.now()
-
-        if now > exp:
-            return "EXPIRED"
-        elif now < exp - timedelta(hours=4):
-            return "UPCOMING"
-        else:
-            return "ACTIVE"
-    except:
-        return "UNKNOWN"
-
-
 # ================= ROOT =================
 @app.route("/")
 def root():
@@ -99,62 +68,48 @@ def root():
 # ================= PUBLIC PAGE =================
 @app.route("/public")
 def public():
-    return render_template_string("""
-    <html>
-    <head>
-        <title>PESAMATRIX</title>
-        <style>
-            body { font-family: Arial; background:#0f172a; color:white; margin:0; }
-            .section { padding:40px; border-bottom:1px solid #1e293b; }
-            a { color:#38bdf8; }
-        </style>
-    </head>
-    <body>
+    cur.execute("SELECT * FROM posts ORDER BY id DESC")
+    posts = cur.fetchall()
 
-    <div class="section">
+    html_posts = ""
+    for p in posts:
+        media = f"<img src='{p[3]}' width='100%'>" if p[3] else ""
+        html_posts += f"""
+        <div style='background:#1e293b;margin:10px;padding:10px'>
+            <b>{p[1]}</b><p>{p[2]}</p>{media}
+        </div>
+        """
+
+    return f"""
+    <body style='background:#0f172a;color:white;font-family:Arial'>
         <h1>🚀 PESAMATRIX</h1>
-        <p>Smart Trading Signal Platform</p>
-    </div>
 
-    <div class="section">
         <h2>About</h2>
-        <p>We provide forex & crypto trading signals in real time.</p>
-    </div>
+        <p>Trading signals & education</p>
 
-    <div class="section">
         <h2>Contacts</h2>
-        <p>📞 +254 700 000 000</p>
-        <p>📧 support@pesamatrix.com</p>
-        <p>📱 Telegram | Instagram | Twitter</p>
-    </div>
+        <p>📞 +254...</p>
 
-    <div class="section">
         <h2>Services</h2>
-        <p>🎥 Videos (Open)</p>
-        <p>📰 Trading News (Open)</p>
-        <p>🔐 Premium Signals (Locked)</p>
-        <a href="/access">Unlock Signals</a>
-    </div>
+        <p>🔐 Signals (Locked)</p>
+        <a href='/access'>Unlock</a>
 
-    <div class="section">
-        <h2>Sign In</h2>
-        <form action="/register" method="post">
-            <input name="name" placeholder="Name"><br><br>
-            <input name="contact" placeholder="Phone or Email"><br><br>
+        <h2>Videos & News</h2>
+        {html_posts}
+
+        <h2>Join</h2>
+        <form action='/register' method='post'>
+            <input name='name' placeholder='Name'><br>
+            <input name='contact'><br>
             <button>Join</button>
         </form>
-    </div>
 
-    <div class="section">
-        <a href="/login">Admin Login</a>
-    </div>
-
+        <br><a href='/login'>Admin</a>
     </body>
-    </html>
-    """)
+    """
 
 
-# ================= USER REGISTER =================
+# ================= REGISTER =================
 @app.route("/register", methods=["POST"])
 def register():
     cur.execute(
@@ -165,19 +120,18 @@ def register():
     return redirect("/public")
 
 
-# ================= ADMIN LOGIN =================
+# ================= LOGIN =================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         if request.form["password"] == ADMIN_PASSWORD:
             session["admin"] = True
             return redirect("/admin")
-        return "Wrong password ❌"
+        return "Wrong password"
 
     return """
-    <h2>Admin Login</h2>
-    <form method="post">
-        <input name="password" placeholder="Password">
+    <form method='post'>
+        <input name='password'>
         <button>Login</button>
     </form>
     """
@@ -189,7 +143,7 @@ def logout():
     return redirect("/login")
 
 
-# ================= BEAUTIFUL ADMIN DASHBOARD =================
+# ================= ADMIN DASHBOARD =================
 @app.route("/admin")
 def admin():
     if not session.get("admin"):
@@ -198,69 +152,70 @@ def admin():
     cur.execute("SELECT * FROM trades ORDER BY id DESC")
     trades = cur.fetchall()
 
+    cur.execute("SELECT * FROM access_codes ORDER BY id DESC")
+    codes = cur.fetchall()
+
     return render_template_string("""
-    <html>
-    <head>
-        <title>Admin Dashboard</title>
-        <style>
-            body { margin:0; font-family:Arial; background:#0f172a; color:white; }
-            .sidebar { width:220px; height:100vh; background:#111827; position:fixed; padding:20px; }
-            .sidebar a { display:block; color:#38bdf8; margin:10px 0; text-decoration:none; }
-            .main { margin-left:240px; padding:20px; }
-            .card { background:#1e293b; padding:15px; margin-bottom:15px; border-radius:10px; }
-            input, select, button {
-                width:100%; padding:10px; margin-top:5px;
-                border-radius:6px; border:none;
-            }
-            button { background:#22c55e; color:white; }
-            .trade { background:#111827; padding:10px; margin-top:10px; border-radius:8px; }
-        </style>
-    </head>
-    <body>
+    <body style="background:#0f172a;color:white;font-family:Arial">
 
-    <div class="sidebar">
-        <h2>ADMIN</h2>
-        <a href="/admin">Dashboard</a>
-        <a href="/logout">Logout</a>
-        <a href="/generate">Generate Code</a>
-    </div>
+    <h1>ADMIN DASHBOARD</h1>
 
-    <div class="main">
+    <a href="/logout">Logout</a>
 
-        <div class="card">
-            <h3>Create Trade</h3>
-            <form action="/trade" method="post">
-                <input name="symbol" placeholder="Symbol">
-                <input name="side" placeholder="BUY / SELL">
-                <input name="entry" placeholder="Entry">
-                <input name="sl" placeholder="SL">
-                <input name="tp" placeholder="TP">
-                <button>Create Trade</button>
-            </form>
+    <h3>Create Trade</h3>
+    <form action="/trade" method="post">
+        <input name="symbol" placeholder="Symbol"><br>
+        <input name="side"><br>
+        <input name="entry"><br>
+        <input name="sl"><br>
+        <input name="tp"><br>
+        <button>Create</button>
+    </form>
+
+    <h3>Update Trade Status</h3>
+    <form action="/update_status" method="post">
+        <input name="id" placeholder="Trade ID"><br>
+        <select name="status">
+            <option>ACTIVE</option>
+            <option>EXPIRED</option>
+            <option>UPCOMING</option>
+        </select>
+        <button>Update</button>
+    </form>
+
+    <h3>Upload Post (Video/Image/News)</h3>
+    <form action="/post" method="post">
+        <input name="title" placeholder="Title"><br>
+        <input name="content" placeholder="Content"><br>
+        <input name="media_url" placeholder="Image/Video URL"><br>
+        <button>Post</button>
+    </form>
+
+    <h3>Trades</h3>
+    {% for t in trades %}
+        <div style="background:#1e293b;margin:10px;padding:10px">
+            ID {{t[0]}} | {{t[1]}} {{t[2]}}<br>
+            Entry: {{t[3]}} SL: {{t[4]}} TP: {{t[5]}}<br>
+            Status: {{t[6]}}
         </div>
+    {% endfor %}
 
-        <div class="card">
-            <h3>Live Trades</h3>
-            {% for t in trades %}
-            <div class="trade">
-                <b>{{t[1]}}</b> {{t[2]}}<br>
-                Entry: {{t[3]}} SL: {{t[4]}} TP: {{t[5]}}<br>
-                Status: {{t[6]}}
-            </div>
-            {% endfor %}
+    <h3>Access Codes</h3>
+    <a href="/generate">Generate New Code</a>
+
+    {% for c in codes %}
+        <div style="background:#111827;margin:5px;padding:5px">
+            {{c[1]}} (expires {{c[2]}})
         </div>
-
-    </div>
+    {% endfor %}
 
     </body>
-    </html>
-    """, trades=trades)
+    """, trades=trades, codes=codes)
 
 
-# ================= TRADE CREATE =================
+# ================= CREATE TRADE =================
 @app.route("/trade", methods=["POST"])
 def trade():
-    data = request.form
     now = datetime.now()
     expiry = now + timedelta(hours=4)
 
@@ -269,11 +224,11 @@ def trade():
         (symbol, side, entry, sl, tp, status, created_at, expiry_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        data["symbol"],
-        data["side"],
-        float(data["entry"]),
-        float(data["sl"]),
-        float(data["tp"]),
+        request.form["symbol"],
+        request.form["side"],
+        float(request.form["entry"]),
+        float(request.form["sl"]),
+        float(request.form["tp"]),
         "ACTIVE",
         now.isoformat(),
         expiry.isoformat()
@@ -283,7 +238,32 @@ def trade():
     return redirect("/admin")
 
 
-# ================= ACCESS SYSTEM =================
+# ================= UPDATE STATUS =================
+@app.route("/update_status", methods=["POST"])
+def update_status():
+    cur.execute("UPDATE trades SET status=? WHERE id=?",
+                (request.form["status"], request.form["id"]))
+    conn.commit()
+    return redirect("/admin")
+
+
+# ================= POSTS =================
+@app.route("/post", methods=["POST"])
+def post():
+    cur.execute("""
+        INSERT INTO posts (title, content, media_url, created_at)
+        VALUES (?, ?, ?, ?)
+    """, (
+        request.form["title"],
+        request.form["content"],
+        request.form["media_url"],
+        datetime.now().isoformat()
+    ))
+    conn.commit()
+    return redirect("/admin")
+
+
+# ================= ACCESS =================
 @app.route("/access", methods=["GET", "POST"])
 def access():
     if request.method == "POST":
@@ -296,12 +276,11 @@ def access():
             session["access"] = True
             return redirect("/signals")
 
-        return "Invalid code ❌"
+        return "Invalid code"
 
     return """
-    <h2>Access Signals</h2>
-    <form method="post">
-        <input name="code">
+    <form method='post'>
+        <input name='code'>
         <button>Unlock</button>
     </form>
     """
@@ -316,11 +295,10 @@ def signals():
     cur.execute("SELECT * FROM trades ORDER BY id DESC")
     rows = cur.fetchall()
 
-    html = "<h1>Premium Signals</h1>"
-
+    html = "<h1>Signals</h1>"
     for r in rows:
         html += f"""
-        <div style='background:#1e293b;color:white;margin:10px;padding:10px'>
+        <div style='background:#1e293b;margin:10px;padding:10px'>
             {r[1]} {r[2]}<br>
             Entry: {r[3]} SL: {r[4]} TP: {r[5]}<br>
             Status: {r[6]}
@@ -330,7 +308,7 @@ def signals():
     return html
 
 
-# ================= CODE GENERATOR =================
+# ================= GENERATE CODE =================
 @app.route("/generate")
 def generate():
     if not session.get("admin"):
@@ -343,7 +321,7 @@ def generate():
                 (code, expiry.isoformat()))
     conn.commit()
 
-    return f"ACCESS CODE: {code}"
+    return redirect("/admin")
 
 
 # ================= START =================
