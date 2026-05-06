@@ -388,11 +388,12 @@ def admin():
         </form>""")
 
     return layout(header("ADMIN")+
-        link("Users","/admin/users")+"<br>"+
-        link("Trades","/admin/trades")+"<br>"+
-        link("Media Upload","/admin/media")+"<br>"+
-        link("Payments","/admin/payments")
-    )
+    link("Users","/admin/users")+"<br>"+
+    link("Trades","/admin/trades")+"<br>"+
+    link("Media Upload","/admin/media")+"<br>"+
+    link("Manage Media","/admin/media/manage")+"<br>"+   # ✅ ADDED HERE
+    link("Payments","/admin/payments")
+)
 
 # ================= ADMIN USERS =================
 @app.route("/admin/users", methods=["GET","POST"])
@@ -458,11 +459,14 @@ def admin_trades():
 # ================= ADMIN MEDIA =================
 @app.route("/admin/media", methods=["GET","POST"])
 def admin_media():
-    if not session.get("admin"): return redirect("/admin")
+    if not session.get("admin"):
+        return redirect("/admin")
 
-    conn=db();cur=conn.cursor()
+    conn = db()
+    cur = conn.cursor()
 
-    if request.method=="POST":
+    # ================= UPLOAD HANDLER =================
+    if request.method == "POST":
 
         # FILE UPLOAD
         if "file" in request.files:
@@ -475,33 +479,53 @@ def admin_media():
 
                 # detect type
                 ext = filename.split(".")[-1].lower()
-                if ext in ["mp4","mov","avi","webm"]:
+                if ext in ["mp4", "mov", "avi", "webm"]:
                     mtype = "video"
                 else:
                     mtype = "image"
 
-                cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",
-                            (filename, None, mtype))
+                cur.execute(
+                    "INSERT INTO media VALUES(NULL,?,?,?)",
+                    (filename, None, mtype)
+                )
 
         # LINK UPLOAD (YouTube / TikTok)
         link = request.form.get("link")
         if link:
-            cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",
-                        (None, link, "video"))
+            cur.execute(
+                "INSERT INTO media VALUES(NULL,?,?,?)",
+                (None, link, "video")
+            )
 
         conn.commit()
 
-    return layout(header("UPLOAD MEDIA")+"""
-    <form method='POST' enctype='multipart/form-data'>
-    Upload File:<br>
-    <input type='file' name='file'><br><br>
+    conn.close()
 
-    OR Video Link:<br>
-    <input name='link'><br><br>
+    # ================= PAGE UI =================
+    return layout(
+        header("UPLOAD MEDIA") +
 
-    <button>Upload</button>
-    </form>
-    """)
+        """
+        <div style='padding:15px'>
+        <form method='POST' enctype='multipart/form-data'>
+
+            Upload File:<br>
+            <input type='file' name='file'><br><br>
+
+            OR Video Link:<br>
+            <input name='link'><br><br>
+
+            <button style='padding:10px;background:#38bdf8;color:white;border:none;border-radius:8px'>
+                Upload
+            </button>
+
+        </form>
+        </div>
+        """
+
+        # 👇 THIS SHOWS YOUR UPLOADED MEDIA
+        + show_admin_media()
+    )
     
 # =================DELETE ROUTE=====================
 @app.route("/admin/delete_media/<int:id>")
