@@ -62,11 +62,17 @@ def get_user():
 @app.route("/")
 def home():
     return layout(f"""
-    <div style='text-align:center;padding:50px'>
+    <div style='text-align:center;padding:40px'>
         <h1 style='color:{BLUE};font-size:45px'>PESAMATRIX AI</h1>
         <p>Forex Signals • AI Trading</p>
+
+        <p>📞 Contact: +254781585319 / +254717434943</p>
+        <p>🎵 TikTok: <a href='https://tiktok.com/@smartgoldsignals' target='_blank'>@smartgoldsignals</a></p>
+
         <a href='/register'>Register</a> | <a href='/login'>Login</a> | <a href='/admin'>Admin</a>
     </div>
+
+    {card("<b>ABOUT US</b><br>Pesamatrix AI provides high-probability forex signals powered by smart trading strategies and AI analysis.")}
 
     <div style='display:grid;grid-template-columns:1fr 1fr'>
         {card(button("📊 Signals","/signals"))}
@@ -78,26 +84,31 @@ def home():
     </div>
     """)
 
-# ================= NEWS (REAL API) =================
+# ================= NEWS =================
 @app.route("/news")
 def news():
-    try:
-        data=requests.get("https://newsapi.org/v2/everything?q=forex&apiKey=YOUR_API_KEY").json()
-        articles=data.get("articles",[])[:5]
-        out=header("FOREX NEWS")
-        for a in articles:
-            out+=card(f"<b>{a['title']}</b><br><a href='{a['url']}'>Read</a>")
-        return layout(out)
-    except:
-        return layout(header("NEWS")+card("API not connected"))
+    return layout(header("FOREX NEWS")+card("Connect your News API"))
 
-# ================= TIKTOK =================
-@app.route("/tiktok")
-def tiktok():
-    return layout(header("TIKTOK") + card("""
-    <iframe src="https://www.tiktok.com/embed/yourvideo"
+# ================= VIDEOS =================
+@app.route("/videos")
+def videos():
+    return layout(header("VIDEOS") + card("""
+    <iframe src="https://www.tiktok.com/embed/7230000000000000000"
     width="100%" height="400"></iframe>
     """))
+
+# ================= IMAGES =================
+@app.route("/images")
+def images():
+    conn=db(); cur=conn.cursor()
+    rows=cur.execute("SELECT * FROM media").fetchall()
+    conn.close()
+
+    out=header("IMAGES")
+    for m in rows:
+        if m["filename"]:
+            out+=card(f"<img src='/static/uploads/{m['filename']}' width='100%'>")
+    return layout(out)
 
 # ================= REGISTER =================
 @app.route("/register", methods=["GET","POST"])
@@ -150,7 +161,7 @@ def dashboard():
         button("Upgrade Plan","/subscribe")
     )
 
-# ================= SUBSCRIPTIONS =================
+# ================= SUBSCRIBE =================
 @app.route("/subscribe")
 def subscribe():
     return layout(header("SUBSCRIBE")+
@@ -189,7 +200,7 @@ def signals():
 
     out=header("SIGNALS")
     for r in rows:
-        out+=card(f"{r['symbol']} | {r['status']}")
+        out+=card(f"{r['symbol']} | Entry:{r['entry']} TP:{r['tp']} SL:{r['sl']} | {r['status']}")
     return layout(out)
 
 # ================= ADMIN =================
@@ -207,8 +218,39 @@ def admin():
     return layout(header("ADMIN DASHBOARD")+
         button("Users","/admin/users")+
         button("Trades","/admin/trades")+
+        button("Add Signal","/admin/add_trade")+
+        button("Generate Code","/admin/generate_code")+
         button("Media","/admin/media")
     )
+
+# ================= GENERATE CODE =================
+@app.route("/admin/generate_code")
+def generate_code():
+    code=str(uuid.uuid4())[:6]
+    return layout(header("GENERATED CODE")+f"<h2>{code}</h2>")
+
+# ================= ADD TRADE =================
+@app.route("/admin/add_trade", methods=["GET","POST"])
+def add_trade():
+    if not session.get("admin"): return redirect("/admin")
+
+    if request.method=="POST":
+        conn=db(); cur=conn.cursor()
+        cur.execute("INSERT INTO trades VALUES(NULL,?,?,?,?,?)",
+                    (request.form["symbol"],request.form["entry"],
+                     request.form["tp"],request.form["sl"],"ACTIVE"))
+        conn.commit(); conn.close()
+        return redirect("/admin/trades")
+
+    return layout(header("ADD SIGNAL")+"""
+    <form method="POST">
+    Symbol:<input name="symbol"><br>
+    Entry:<input name="entry"><br>
+    TP:<input name="tp"><br>
+    SL:<input name="sl"><br>
+    <button>Add</button>
+    </form>
+    """)
 
 # ================= ADMIN USERS =================
 @app.route("/admin/users")
@@ -238,7 +280,7 @@ def admin_trades():
         out+=card(f"{r['symbol']} | {r['status']}")
     return layout(out)
 
-# ================= ADMIN MEDIA =================
+# ================= MEDIA =================
 @app.route("/admin/media", methods=["GET","POST"])
 def admin_media():
     if not session.get("admin"): return redirect("/admin")
