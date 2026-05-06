@@ -297,6 +297,11 @@ def videos():
 
     return layout(out)
 
+# ================= NEWS=================
+
+@app.route("/news")
+def news():
+    return layout(header("NEWS") + card("Market updates coming soon"))
 # ================= ADMIN =================
 @app.route("/admin", methods=["GET","POST"])
 def admin():
@@ -322,7 +327,7 @@ def admin():
     )
 
 
-# ✅ ADD IT HERE (outside the admin function)
+# ================= MANAGE MEDIA =================
 @app.route("/admin/media/manage")
 def manage_media():
     if not session.get("admin"):
