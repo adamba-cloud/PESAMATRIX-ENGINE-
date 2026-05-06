@@ -248,14 +248,49 @@ def images():
     rows = cur.execute("SELECT * FROM media WHERE type='image'").fetchall()
     conn.close()
 
-    out = header("🖼 IMAGES")
+    out = header("🖼 IMAGE GALLERY")
+
+    out += """
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+        gap:10px;
+        padding:15px;
+    ">
+    """
 
     for m in rows:
-        out += f"<img src='/static/uploads/{m['filename']}' width='100%'>"
+        out += f"""
+        <div style="overflow:hidden;border-radius:10px">
+            <img src="/static/uploads/{m['filename']}"
+            style="width:100%;height:150px;object-fit:cover;cursor:pointer"
+            onclick="openModal('/static/uploads/{m['filename']}')">
+        </div>
+        """
+
+    out += "</div>"
+
+    # Modal Viewer
+    out += """
+    <div id="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.9);justify-content:center;align-items:center;z-index:999">
+        <img id="modalImg" style="max-width:90%;max-height:90%">
+    </div>
+
+    <script>
+    function openModal(src){
+        document.getElementById('modal').style.display='flex';
+        document.getElementById('modalImg').src=src;
+    }
+    document.getElementById('modal').onclick=function(){
+        this.style.display='none';
+    }
+    </script>
+    """
 
     return layout(out)
 
-#==============TRADING VIDEOS========================
+#=================VIDEOS========================
 @app.route("/videos")
 def videos():
     conn=db();cur=conn.cursor()
@@ -264,19 +299,39 @@ def videos():
 
     out = header("🎥 TRADING VIDEOS")
 
+    out += """
+    <div style="
+        display:grid;
+        grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+        gap:15px;
+        padding:15px;
+    ">
+    """
+
     for m in rows:
+
+        # Uploaded video
         if m["filename"]:
             out += f"""
-            <video controls width='100%'>
-                <source src='/static/uploads/{m["filename"]}'>
-            </video>
+            <div style="background:#111a2e;padding:10px;border-radius:10px">
+                <video controls style="width:100%;border-radius:10px">
+                    <source src="/static/uploads/{m['filename']}">
+                </video>
+            </div>
             """
+
+        # Embedded link (YouTube/TikTok)
         elif m["link"]:
             out += f"""
-            <iframe width="100%" height="250"
-            src="{m['link']}"
-            frameborder="0" allowfullscreen></iframe>
+            <div style="background:#111a2e;padding:10px;border-radius:10px">
+                <iframe width="100%" height="200"
+                src="{m['link']}"
+                frameborder="0" allowfullscreen
+                style="border-radius:10px"></iframe>
+            </div>
             """
+
+    out += "</div>"
 
     return layout(out)
 
