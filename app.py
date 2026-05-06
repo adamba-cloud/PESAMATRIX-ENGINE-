@@ -49,9 +49,11 @@ def init():
     )""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS media(
-        id INTEGER PRIMARY KEY,
-        filename TEXT, link TEXT
-    )""")
+    id INTEGER PRIMARY KEY,
+    filename TEXT,
+    link TEXT,
+    type TEXT
+)""")
 
     cur.execute("""CREATE TABLE IF NOT EXISTS payments(
         id INTEGER PRIMARY KEY,
@@ -93,8 +95,9 @@ def home():
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);padding:20px">
         <a href="/signals">{card("📊 Live Signals")}</a>
-        <a href="/media">{card("🎥 Trading Videos")}</a>
         <a href="/news">{card("📰 Market News")}</a>
+        <a href="/videos">{card("🎥 Trading Videos")}</a>
+        <a href="/images">{card("🖼 Images")}</a>
         <a href="/signals">{card("🔐 Premium Signals")}</a>
         <a href="/dashboard">{card("👤 Dashboard")}</a>
         <a href="/payments">{card("💰 Payment Info")}</a>
@@ -238,6 +241,45 @@ def media():
 def news():
     return layout(header("NEWS")+card("Market updates coming soon"))
 
+#==============IMAGES================================
+@app.route("/images")
+def images():
+    conn=db();cur=conn.cursor()
+    rows = cur.execute("SELECT * FROM media WHERE type='image'").fetchall()
+    conn.close()
+
+    out = header("🖼 IMAGES")
+
+    for m in rows:
+        out += f"<img src='/static/uploads/{m['filename']}' width='100%'>"
+
+    return layout(out)
+
+#==============TRADING VIDEOS========================
+@app.route("/videos")
+def videos():
+    conn=db();cur=conn.cursor()
+    rows = cur.execute("SELECT * FROM media WHERE type='video'").fetchall()
+    conn.close()
+
+    out = header("🎥 TRADING VIDEOS")
+
+    for m in rows:
+        if m["filename"]:
+            out += f"""
+            <video controls width='100%'>
+                <source src='/static/uploads/{m["filename"]}'>
+            </video>
+            """
+        elif m["link"]:
+            out += f"""
+            <iframe width="100%" height="250"
+            src="{m['link']}"
+            frameborder="0" allowfullscreen></iframe>
+            """
+
+    return layout(out)
+
 # ================= PAYMENT =================
 @app.route("/payments")
 def payments():
@@ -334,71 +376,51 @@ def admin_trades():
 
 # ================= ADMIN MEDIA =================
 @app.route("/admin/media", methods=["GET","POST"])
-from werkzeug.utils import secure_filename
-
-@app.route("/admin/media", methods=["GET","POST"])
 def admin_media():
-    if not session.get("admin"):
-        return redirect("/admin")
+    if not session.get("admin"): return redirect("/admin")
 
-    conn = db()
-    cur = conn.cursor()
+    conn=db();cur=conn.cursor()
 
-    message = ""
+    if request.method=="POST":
 
-    if request.method == "POST":
-
-        # ===== FILE UPLOAD =====
+        # FILE UPLOAD
         if "file" in request.files:
             f = request.files["file"]
 
-            if f and f.filename != "":
-                filename = secure_filename(f.filename)
-
-                # avoid overwrite
-                unique_name = str(uuid.uuid4()) + "_" + filename
-                path = os.path.join(UPLOAD_FOLDER, unique_name)
-
+            if f and f.filename:
+                filename = f.filename.replace(" ", "_")
+                path = os.path.join(UPLOAD_FOLDER, filename)
                 f.save(path)
 
-                cur.execute(
-                    "INSERT INTO media VALUES(NULL,?,NULL)",
-                    (unique_name,)
-                )
+                # detect type
+                ext = filename.split(".")[-1].lower()
+                if ext in ["mp4","mov","avi","webm"]:
+                    mtype = "video"
+                else:
+                    mtype = "image"
 
-                message = "✅ File uploaded successfully"
+                cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",
+                            (filename, None, mtype))
 
-        # ===== LINK UPLOAD =====
-        if request.form.get("link"):
-            link = request.form.get("link").strip()
-
-            if link != "":
-                cur.execute(
-                    "INSERT INTO media VALUES(NULL,NULL,?)",
-                    (link,)
-                )
-
-                message = "✅ Link added successfully"
+        # LINK UPLOAD (YouTube / TikTok)
+        link = request.form.get("link")
+        if link:
+            cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",
+                        (None, link, "video"))
 
         conn.commit()
 
-    conn.close()
+    return layout(header("UPLOAD MEDIA")+"""
+    <form method='POST' enctype='multipart/form-data'>
+    Upload File:<br>
+    <input type='file' name='file'><br><br>
 
-    return layout(
-        header("UPLOAD MEDIA") +
-        card(message) +
-        """
-        <form method='POST' enctype='multipart/form-data'>
-            <h3 style='color:#38bdf8'>Upload From Gallery</h3>
-            <input type='file' name='file'><br><br>
+    OR Video Link:<br>
+    <input name='link'><br><br>
 
-            <h3 style='color:#38bdf8'>OR Add Video Link</h3>
-            <input name='link' placeholder='https://...'><br><br>
-
-            <button>Upload</button>
-        </form>
-        """
-    )
+    <button>Upload</button>
+    </form>
+    """)
 
 # ================= ADMIN PAYMENTS =================
 @app.route("/admin/payments", methods=["GET","POST"])
