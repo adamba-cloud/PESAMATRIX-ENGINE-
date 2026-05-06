@@ -108,104 +108,8 @@ def get_user():
 
 # ================= HOME =================
 @app.route("/")
-@app.route("/")
 def home():
-    conn=db(); cur=conn.cursor()
-
-    # Latest signals
-    signals=cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 3").fetchall()
-
-    # Latest media
-    media=cur.execute("SELECT * FROM media ORDER BY id DESC LIMIT 2").fetchall()
-
-    conn.close()
-
-    signal_html=""
-    for s in signals:
-        signal_html+=f"""
-        <div style='padding:10px;border-bottom:1px solid #1e293b'>
-        {s['symbol']} | {s['status']}<br>
-        Entry:{s['entry']} TP:{s['tp']} SL:{s['sl']}
-        </div>
-        """
-
-    media_html=""
-    for m in media:
-        if m["filename"]:
-            media_html+=f"<img src='/static/uploads/{m['filename']}' width='100%'>"
-        elif m["link"]:
-            media_html+=f"<iframe src='{m['link']}' width='100%' height='200'></iframe>"
-
-    return layout(f"""
-
-    <!-- 🔴 ALERT BAR -->
-    <div style='background:red;text-align:center;padding:8px'>
-    🔥 LIVE SIGNAL RUNNING NOW • JOIN VIP TODAY
-    </div>
-
-    <!-- HERO -->
-    <div style='text-align:center;padding:30px'>
-        <h1 style='color:{BLUE};font-size:45px'>PESAMATRIX AI</h1>
-        <p>Forex Signals • AI Trading • Smart Profits</p>
-
-        <p>
-        📞 <a href='tel:+254781585319' style='color:{BLUE}'>+254781585319</a> /
-        <a href='tel:+254717434943' style='color:{BLUE}'>+254717434943</a>
-        </p>
-
-        <p>
-        <a href='/register' style='color:{BLUE}'>Register</a> |
-        <a href='/login' style='color:{BLUE}'>Login</a> |
-        <a href='/admin' style='color:{BLUE}'>Admin</a>
-        </p>
-    </div>
-
-    <!-- 📊 STATS -->
-    {card(f"""
-    <div style='display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center'>
-        <div>🔥 Win Rate<br><b>87%</b></div>
-        <div>👥 Traders<br><b>1200+</b></div>
-        <div>📊 Signals Today<br><b>{len(signals)}</b></div>
-    </div>
-    """)}
-
-    <!-- 🤖 AI ANALYSIS -->
-    {card("""
-    <b>🤖 AI MARKET ANALYSIS</b><br><br>
-    GOLD: BUY (92%)<br>
-    EURUSD: SELL (87%)<br>
-    GBPUSD: BUY (81%)
-    """)}
-
-    <!-- 📊 SIGNAL PREVIEW -->
-    {card(f"""
-    <b>🔥 LATEST SIGNALS</b><br><br>
-    {signal_html}
-    """)}
-
-    <!-- 🎥 MEDIA -->
-    {card(f"""
-    <b>📺 LIVE MARKET CONTENT</b><br><br>
-    {media_html}
-    """)}
-
-    <!-- 💎 CTA -->
-    {card(f"""
-    <h2 style='text-align:center;color:gold'>💎 VIP SIGNALS ACTIVE</h2>
-    <p style='text-align:center'>Join now and start earning from forex signals</p>
-    {button("🚀 SUBSCRIBE NOW","/subscribe")}
-    """)}
-
-    <!-- NAV GRID -->
-    <div style='display:grid;grid-template-columns:1fr 1fr'>
-        {card(button("📊 Signals","/signals"))}
-        {card(button("📰 News","/news"))}
-        {card(button("🎥 Videos","/videos"))}
-        {card(button("🖼 Images","/images"))}
-        {card(button("👤 Dashboard","/dashboard"))}
-        {card(button("💳 Subscribe","/subscribe"))}
-    </div>
-    """)
+    return layout(header("WELCOME")+card("PESAMATRIX AI PLATFORM"))
 
 # ================= REGISTER =================
 @app.route("/register", methods=["POST","GET"])
@@ -240,7 +144,6 @@ def login():
         if datetime.now() > datetime.fromisoformat(c["expiry"]):
             return layout(header("EXPIRED")+card("Code expired"))
 
-        # TRACK
         cur.execute("INSERT INTO logs VALUES(NULL,?,?,?,?)",
                     (code,request.remote_addr,
                      request.headers.get("User-Agent"),
@@ -283,18 +186,15 @@ def subscribe():
 
     return layout(header("SUBSCRIBE")+"""
     Paybill: 322372<br><br>
-
     <form method="POST">
     Phone:<input name="phone"><br>
     Amount:<input name="amount"><br>
     Mpesa Code:<input name="mpesa"><br>
-
     <select name="plan">
     <option value="daily">Daily</option>
     <option value="weekly">Weekly</option>
     <option value="monthly">Monthly</option>
     </select><br>
-
     <button>Submit</button>
     </form>
     """)
@@ -312,19 +212,7 @@ def signals():
 
     out=header("SIGNALS")
     for r in rows:
-        out+=card(f"{r['symbol']} | Entry:{r['entry']} TP:{r['tp']} SL:{r['sl']} | {r['status']}")
-    return layout(out)
-
-# ================= NEWS =================
-@app.route("/news")
-def news():
-    conn=db(); cur=conn.cursor()
-    rows=cur.execute("SELECT * FROM news ORDER BY id DESC").fetchall()
-    conn.close()
-
-    out=header("NEWS")
-    for n in rows:
-        out+=card(f"<b>{n['title']}</b><br>{n['content']}")
+        out+=card(f"{r['symbol']} | {r['status']}")
     return layout(out)
 
 # ================= ADMIN =================
@@ -339,47 +227,137 @@ def admin():
         <form method="POST"><input name="pass"><button>Login</button></form>
         """)
 
-    return layout(header("ADMIN")+
+    return layout(header("ADMIN DASHBOARD")+
         button("Payments","/admin/payments")+
         button("Logs","/admin/logs")+
-        button("Trades","/admin/manage_trades")+
+        button("Manage Trades","/admin/manage_trades")+
         button("Add Signal","/admin/add_trade")+
         button("Media","/admin/media")+
         button("News","/admin/news")
     )
 
-# ================= ADMIN PAYMENTS =================
-@app.route("/admin/payments", methods=["POST","GET"])
-def admin_payments():
+# ================= ADMIN LOGS =================
+@app.route("/admin/logs")
+def admin_logs():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db(); cur=conn.cursor()
+    rows=cur.execute("SELECT * FROM logs ORDER BY id DESC").fetchall()
+    conn.close()
+
+    out=header("USER LOGS")
+    for l in rows:
+        out+=card(f"{l['code']} | {l['ip']} | {l['date']}")
+    return layout(out)
+
+# ================= ADMIN MEDIA =================
+@app.route("/admin/media", methods=["POST","GET"])
+def admin_media():
     if not session.get("admin"): return redirect("/admin")
 
     conn=db(); cur=conn.cursor()
 
     if request.method=="POST":
-        pid=request.form["id"]
-        plan=request.form["plan"]
+        f=request.files.get("file")
+        link=request.form.get("link")
+        type=request.form.get("type")
 
-        days={"daily":1,"weekly":7,"monthly":30}[plan]
-        expiry=(datetime.now()+timedelta(days=days)).isoformat()
-        code=str(uuid.uuid4())[:6]
-
-        cur.execute("UPDATE payments SET status='APPROVED' WHERE id=?", (pid,))
-        cur.execute("INSERT INTO codes VALUES(NULL,?,?,?,0)", (code,plan,expiry))
+        if f and f.filename:
+            f.save(os.path.join(UPLOAD_FOLDER,f.filename))
+            cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",(f.filename,None,type))
+        elif link:
+            cur.execute("INSERT INTO media VALUES(NULL,?,?,?)",(None,link,type))
 
         conn.commit()
 
-    rows=cur.execute("SELECT * FROM payments WHERE status='PENDING'").fetchall()
     conn.close()
 
-    out=header("PAYMENTS")
-    for p in rows:
+    return layout(header("MEDIA")+"""
+    <form method="POST" enctype="multipart/form-data">
+    File:<input type="file" name="file"><br>
+    OR Link:<input name="link"><br>
+    <select name="type">
+    <option value="image">Image</option>
+    <option value="video">Video</option>
+    </select><br>
+    <button>Upload</button>
+    </form>
+    """)
+
+# ================= ADMIN NEWS =================
+@app.route("/admin/news", methods=["POST","GET"])
+def admin_news():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db(); cur=conn.cursor()
+
+    if request.method=="POST":
+        cur.execute("INSERT INTO news VALUES(NULL,?,?,?)",
+                    (request.form["title"],
+                     request.form["content"],
+                     str(datetime.now())))
+        conn.commit()
+
+    conn.close()
+
+    return layout(header("ADD NEWS")+"""
+    <form method="POST">
+    Title:<input name="title"><br>
+    Content:<textarea name="content"></textarea><br>
+    <button>Add</button>
+    </form>
+    """)
+
+# ================= ADMIN ADD TRADE =================
+@app.route("/admin/add_trade", methods=["POST","GET"])
+def add_trade():
+    if not session.get("admin"): return redirect("/admin")
+
+    if request.method=="POST":
+        conn=db(); cur=conn.cursor()
+        cur.execute("INSERT INTO trades VALUES(NULL,?,?,?,?,?)",
+                    (request.form["symbol"],request.form["entry"],
+                     request.form["tp"],request.form["sl"],"UPCOMING"))
+        conn.commit(); conn.close()
+        return redirect("/admin/manage_trades")
+
+    return layout(header("ADD SIGNAL")+"""
+    <form method="POST">
+    Symbol:<input name="symbol"><br>
+    Entry:<input name="entry"><br>
+    TP:<input name="tp"><br>
+    SL:<input name="sl"><br>
+    <button>Add</button>
+    </form>
+    """)
+
+# ================= ADMIN MANAGE TRADES =================
+@app.route("/admin/manage_trades", methods=["POST","GET"])
+def manage_trades():
+    if not session.get("admin"): return redirect("/admin")
+
+    conn=db(); cur=conn.cursor()
+
+    if request.method=="POST":
+        cur.execute("UPDATE trades SET status=? WHERE id=?",
+                    (request.form["status"],request.form["id"]))
+        conn.commit()
+
+    rows=cur.execute("SELECT * FROM trades").fetchall()
+    conn.close()
+
+    out=header("MANAGE TRADES")
+    for r in rows:
         out+=card(f"""
-        {p['phone']} | {p['amount']}<br>
-        Mpesa:{p['mpesa_code']}<br>
+        {r['symbol']} | {r['status']}
         <form method="POST">
-        <input type="hidden" name="id" value="{p['id']}">
-        <input type="hidden" name="plan" value="{p['plan']}">
-        <button>Approve</button>
+        <input type="hidden" name="id" value="{r['id']}">
+        <select name="status">
+        <option>UPCOMING</option>
+        <option>RUNNING</option>
+        <option>EXPIRED</option>
+        </select>
+        <button>Update</button>
         </form>
         """)
     return layout(out)
