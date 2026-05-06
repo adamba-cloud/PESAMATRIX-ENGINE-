@@ -26,6 +26,34 @@ def card(c):
 def link(t,u):
     return f"<a href='{u}' style='color:{BLUE}'>{t}</a>"
 
+def show_admin_media():
+    conn = db()
+    cur = conn.cursor()
+    rows = cur.execute("SELECT * FROM media").fetchall()
+    conn.close()
+
+    out = "<h2 style='color:#38bdf8;padding:10px'>Uploaded Media</h2>"
+
+    for m in rows:
+        preview = ""
+
+        if m["filename"]:
+            preview = f"<img src='/static/uploads/{m['filename']}' width='150'>"
+
+        elif m["link"]:
+            preview = f"<iframe width='150' height='100' src='{m['link']}'></iframe>"
+
+        out += f"""
+        <div style="background:#111a2e;padding:10px;margin:10px;border-radius:10px">
+            {preview}<br>
+
+            <a href="/admin/edit_media/{m['id']}" style="color:#38bdf8">✏ Edit</a> |
+            <a href="/admin/delete_media/{m['id']}" style="color:red">🗑 Delete</a>
+        </div>
+        """
+
+    return out
+
 # ================= DB =================
 def db():
     conn = sqlite3.connect("app.db")
@@ -207,18 +235,17 @@ def media():
 
     for m in rows:
 
-        # ===== IMAGE / VIDEO FILE =====
+        # IMAGE / VIDEO FILE
         if m["filename"]:
             out += card(f"""
                 <img src='/static/uploads/{m["filename"]}' 
                 style='width:100%;border-radius:10px'>
             """)
 
-        # ===== VIDEO LINK =====
+        # VIDEO LINK
         if m["link"]:
             link = m["link"]
 
-            # convert normal YouTube link to embed
             if "youtube.com/watch?v=" in link:
                 link = link.replace("watch?v=", "embed/")
 
@@ -397,7 +424,6 @@ def admin_users():
         </form>
         """)
     return layout(out)
-
 # ================= ADMIN TRADES =================
 @app.route("/admin/trades", methods=["GET","POST"])
 def admin_trades():
@@ -476,7 +502,76 @@ def admin_media():
     <button>Upload</button>
     </form>
     """)
+    
+# =================DELETE ROUTE=====================
+@app.route("/admin/delete_media/<int:id>")
+def delete_media(id):
+    if not session.get("admin"):
+        return redirect("/admin")
 
+    conn = db(); cur = conn.cursor()
+
+    # get file first
+    m = cur.execute("SELECT * FROM media WHERE id=?", (id,)).fetchone()
+
+    if m:
+        # delete file from storage
+        if m["filename"]:
+            path = os.path.join(UPLOAD_FOLDER, m["filename"])
+            if os.path.exists(path):
+                os.remove(path)
+
+        # delete from DB
+        cur.execute("DELETE FROM media WHERE id=?", (id,))
+        conn.commit()
+
+    conn.close()
+    return redirect("/admin/media")
+
+ # ================ EDIT ROUTE =====================
+ @app.route("/admin/edit_media/<int:id>", methods=["GET","POST"])
+def edit_media(id):
+    if not session.get("admin"):
+        return redirect("/admin")
+
+    conn = db(); cur = conn.cursor()
+
+    if request.method == "POST":
+        new_link = request.form.get("link")
+
+        # replace link
+        if new_link:
+            cur.execute("UPDATE media SET link=? WHERE id=?", (new_link, id))
+
+        # replace file
+        if "file" in request.files:
+            f = request.files["file"]
+            if f and f.filename:
+                filename = f.filename.replace(" ", "_")
+                path = os.path.join(UPLOAD_FOLDER, filename)
+                f.save(path)
+
+                cur.execute("UPDATE media SET filename=?, link=NULL WHERE id=?",
+                            (filename, id))
+
+        conn.commit()
+        conn.close()
+        return redirect("/admin/media")
+
+    m = cur.execute("SELECT * FROM media WHERE id=?", (id,)).fetchone()
+    conn.close()
+
+    return layout(header("EDIT MEDIA") + f"""
+    <form method="POST" enctype="multipart/form-data">
+        Replace File:<br>
+        <input type="file" name="file"><br><br>
+
+        OR Update Link:<br>
+        <input name="link" value="{m['link'] if m['link'] else ''}"><br><br>
+
+        <button>Update</button>
+    </form>
+    """)
 # ================= ADMIN PAYMENTS =================
 @app.route("/admin/payments", methods=["GET","POST"])
 def admin_payments():
