@@ -321,6 +321,38 @@ def admin():
         link("Payments","/admin/payments")
     )
 
+
+# ✅ ADD IT HERE (outside the admin function)
+@app.route("/admin/media/manage")
+def manage_media():
+    if not session.get("admin"):
+        return redirect("/admin")
+
+    conn = db()
+    cur = conn.cursor()
+    rows = cur.execute("SELECT * FROM media").fetchall()
+    conn.close()
+
+    out = header("MANAGE MEDIA")
+
+    for m in rows:
+        preview = ""
+
+        if m["filename"]:
+            preview = f"<img src='/static/uploads/{m['filename']}' width='120'>"
+        elif m["link"]:
+            preview = f"<iframe width='120' height='80' src='{m['link']}'></iframe>"
+
+        out += card(f"""
+        {preview}<br>
+        Type: {m['type']}<br>
+
+        <a href="/admin/edit_media/{m['id']}" style="color:{BLUE}">✏ Edit</a> |
+        <a href="/admin/delete_media/{m['id']}" style="color:red">🗑 Delete</a>
+        """)
+
+    return layout(out)
+
 # ================= DELETE MEDIA =================
 @app.route("/admin/delete_media/<int:id>")
 def delete_media(id):
