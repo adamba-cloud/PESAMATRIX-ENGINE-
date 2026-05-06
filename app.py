@@ -108,14 +108,50 @@ def get_user():
 
 # ================= HOME =================
 @app.route("/")
+@app.route("/")
 def home():
+    conn=db(); cur=conn.cursor()
+
+    # Latest signals
+    signals=cur.execute("SELECT * FROM trades ORDER BY id DESC LIMIT 3").fetchall()
+
+    # Latest media
+    media=cur.execute("SELECT * FROM media ORDER BY id DESC LIMIT 2").fetchall()
+
+    conn.close()
+
+    signal_html=""
+    for s in signals:
+        signal_html+=f"""
+        <div style='padding:10px;border-bottom:1px solid #1e293b'>
+        {s['symbol']} | {s['status']}<br>
+        Entry:{s['entry']} TP:{s['tp']} SL:{s['sl']}
+        </div>
+        """
+
+    media_html=""
+    for m in media:
+        if m["filename"]:
+            media_html+=f"<img src='/static/uploads/{m['filename']}' width='100%'>"
+        elif m["link"]:
+            media_html+=f"<iframe src='{m['link']}' width='100%' height='200'></iframe>"
+
     return layout(f"""
+
+    <!-- 🔴 ALERT BAR -->
+    <div style='background:red;text-align:center;padding:8px'>
+    🔥 LIVE SIGNAL RUNNING NOW • JOIN VIP TODAY
+    </div>
+
+    <!-- HERO -->
     <div style='text-align:center;padding:30px'>
         <h1 style='color:{BLUE};font-size:45px'>PESAMATRIX AI</h1>
         <p>Forex Signals • AI Trading • Smart Profits</p>
 
-        <p>📞 <a href='tel:+254781585319' style='color:{BLUE}'>+254781585319</a> /
-        <a href='tel:+254717434943' style='color:{BLUE}'>+254717434943</a></p>
+        <p>
+        📞 <a href='tel:+254781585319' style='color:{BLUE}'>+254781585319</a> /
+        <a href='tel:+254717434943' style='color:{BLUE}'>+254717434943</a>
+        </p>
 
         <p>
         <a href='/register' style='color:{BLUE}'>Register</a> |
@@ -124,8 +160,43 @@ def home():
         </p>
     </div>
 
-    {card("<b>ABOUT</b><br>AI powered forex signals with high accuracy.")}
+    <!-- 📊 STATS -->
+    {card(f"""
+    <div style='display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center'>
+        <div>🔥 Win Rate<br><b>87%</b></div>
+        <div>👥 Traders<br><b>1200+</b></div>
+        <div>📊 Signals Today<br><b>{len(signals)}</b></div>
+    </div>
+    """)}
 
+    <!-- 🤖 AI ANALYSIS -->
+    {card("""
+    <b>🤖 AI MARKET ANALYSIS</b><br><br>
+    GOLD: BUY (92%)<br>
+    EURUSD: SELL (87%)<br>
+    GBPUSD: BUY (81%)
+    """)}
+
+    <!-- 📊 SIGNAL PREVIEW -->
+    {card(f"""
+    <b>🔥 LATEST SIGNALS</b><br><br>
+    {signal_html}
+    """)}
+
+    <!-- 🎥 MEDIA -->
+    {card(f"""
+    <b>📺 LIVE MARKET CONTENT</b><br><br>
+    {media_html}
+    """)}
+
+    <!-- 💎 CTA -->
+    {card(f"""
+    <h2 style='text-align:center;color:gold'>💎 VIP SIGNALS ACTIVE</h2>
+    <p style='text-align:center'>Join now and start earning from forex signals</p>
+    {button("🚀 SUBSCRIBE NOW","/subscribe")}
+    """)}
+
+    <!-- NAV GRID -->
     <div style='display:grid;grid-template-columns:1fr 1fr'>
         {card(button("📊 Signals","/signals"))}
         {card(button("📰 News","/news"))}
